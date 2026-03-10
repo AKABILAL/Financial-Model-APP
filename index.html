@@ -549,7 +549,20 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
     <button class="qc" onclick="qb('IAS 37 provisions warranty onerous 5 years')"><span class="qt">IAS 37</span>Provisions</button>
     <div class="sl">Valuation</div>
     <button class="qc" onclick="qb('DCF valuation 5 years WACC 11.5% terminal growth 3%')"><span class="qt">DCF</span>Discounted Cash Flow</button>
+    <button class="qc" onclick="qb('DDM dividend discount model 5 years Ke 10.5% terminal growth 3.5%')"><span class="qt">DDM</span>Dividend Discount Model</button>
+    <button class="qc" onclick="qb('COMPS trading comps relative valuation EV EBITDA peer multiples')"><span class="qt">COMPS</span>Trading Comps / Relative</button>
+    <button class="qc" onclick="qb('NAV net asset value sum of parts valuation')"><span class="qt">NAV</span>Net Asset Value (SOTP)</button>
     <button class="qc" onclick="qb('LBO leveraged buyout 5 years 8x entry 9x exit')"><span class="qt">LBO</span>Leveraged Buyout</button>
+    <div class="sl">IFRS 9 — Advanced</div>
+    <button class="qc" onclick="qb('IFRS 9 hedge accounting cash flow hedge 5 years')"><span class="qt">IFRS 9</span>Hedge Accounting (CFH/FVH)</button>
+    <button class="qc" onclick="qb('IFRS 9 classification measurement SPPI business model test')"><span class="qt">IFRS 9</span>Classification &amp; Measurement</button>
+    <div class="sl">IFRS 16 — Advanced</div>
+    <button class="qc" onclick="qb('IFRS 16 lease modification reassessment IBR revised 5 years')"><span class="qt">IFRS 16</span>Lease Modification</button>
+    <div class="sl">IAS 12 — Advanced</div>
+    <button class="qc" onclick="qb('IAS 12 balance sheet approach carrying amount tax base temporary differences')"><span class="qt">IAS 12</span>Balance Sheet Approach</button>
+    <div class="sl">Group / Consolidation</div>
+    <button class="qc" onclick="qb('IFRS 3 business combination purchase price allocation goodwill PPA 5 years')"><span class="qt">IFRS 3</span>Business Combination (PPA)</button>
+    <button class="qc" onclick="qb('IFRS 10 consolidation group worksheet intercompany elimination')"><span class="qt">IFRS 10</span>Group Consolidation</button>
     <div class="sl" id="ht" style="display:none">Recent Models</div>
     <div id="hl"></div>
   </div>
@@ -754,7 +767,9 @@ function _shortNum(v){if(v===null||v===undefined||isNaN(parseFloat(v)))return'�
    PURE MATH UTILITIES
 ═══════════════════════════════════════════════════════════════════════ */
 function r0(v){return Math.round(v);}
+function r1(v){return Math.round(v*10)/10;}
 function r2(v){return Math.round(v*100)/100;}
+function r4(v){return Math.round(v*10000)/10000;}
 function pct(v){return r2(v*100);}
 function pv(pmt,rate,n){ // PV of annuity
   if(rate===0) return pmt*n;
@@ -784,23 +799,66 @@ function a(k){return ASM[k]!==undefined?parseFloat(ASM[k].value):0;}
 ═══════════════════════════════════════════════════════════════════════ */
 function detect(p){
   p=p.toLowerCase();
-  if(/ias\s*2\b|inventor(y|ies)|fifo|weighted.?av/.test(p)) return 'IAS2';
-  if(/ias\s*12\b|deferred.?tax|temp.*diff|timing.*diff/.test(p)) return 'IAS12';
-  if(/ias\s*16\b|prop.*plant|ppe\b|pp&e|depreci/.test(p)) return 'IAS16';
-  if(/ias\s*19\b|pension|defined.?benefit|employee.?ben|actuari/.test(p)) return 'IAS19';
-  if(/ias\s*36\b|impairment|value.?in.?use|cgu|recoverable/.test(p)) return 'IAS36';
-  if(/ias\s*37\b|provision|warranty|onerous|restructur|contingent/.test(p)) return 'IAS37';
-  if(/ias\s*38\b|intangible|r&d\b|r\s*&\s*d\b|development.?cost/.test(p)) return 'IAS38';
-  if(/ifrs\s*9.*pd\b|pd.*calib/.test(p)) return 'IFRSPD';
-  if(/ifrs\s*9|ecl\b|expected.?credit|stage\s*[123]/.test(p)) return 'IFRS9';
-  if(/ifrs\s*15|revenue.?recog|5.?step|perf.*oblig|contract.*cust/.test(p)) return 'IFRS15';
-  if(/ifrs\s*16|lease|rou\b|right.?of.?use|ibr\b/.test(p)) return 'IFRS16';
-  if(/ifrs\s*17|insurance|csm\b|bba\b|vfa\b|gmm\b/.test(p)) return 'IFRS17';
-  if(/ifrs\s*18|p\s*&\s*l|income.?state|profit.?loss|function.*nature/.test(p)) return 'IFRS18';
-  if(/ifrs\s*7|market.?risk|credit.?risk|liquidity.?risk|risk.?disclos/.test(p)) return 'IFRS7';
-  if(/lbo|leveraged.?buy/.test(p)) return 'LBO';
-  if(/m\s*&\s*a|merger|acqui|accret|dilut/.test(p)) return 'MA';
-  if(/dcf|discounted|wacc|valuat/.test(p)) return 'DCF';
+  /* Count mentions of each standard — highest count wins.
+     This handles cross-references (e.g. IAS 16 sheet mentions IAS 36 once). */
+  var scores={
+    'IFRS17':0,'IFRS16':0,'IFRS15':0,'IFRS18':0,'IFRS9':0,'IFRS7':0,
+    'IAS38':0,'IAS37':0,'IAS36':0,'IAS19':0,'IAS16':0,'IAS12':0,'IAS2':0,
+    'DCF':0,'LBO':0,
+    'DDM':0,'COMPS':0,'NAV':0,'IAS12BS':0,
+    'IFRS9HEDGE':0,'IFRS9CM':0,'IFRS16MOD':0,'IFRS3':0,'IFRS10':0
+  };
+  var patterns=[
+    /* New specific patterns FIRST — more specific than generic numbered standard */
+    ['IFRS9HEDGE', /hedge.?account|cash.?flow.?hedge|fair.?value.?hedge|net.?invest.?hedge/g],
+    ['IFRS9CM',    /\bsppi\b|classif.*measur|business.?model.*test/g],
+    ['IFRS16MOD',  /lease.?modif|lease.?reassess|lease.*modif/g],
+    ['IAS12BS',    /balance.?sheet.*deferred|carrying.?amt.*tax.?base|tax.?base/g],
+    ['IFRS3',      /business.?combin|purchase.?price.?alloc|\bppa\b|ifrs\s*3\b/g],
+    ['IFRS10',     /ifrs\s*10\b|consolid.*group|interco.*eliminat/g],
+    ['DDM',        /\bddm\b|dividend.?discount|gordon.?growth/g],
+    ['COMPS',      /\bcomps\b|trading.?comp|relative.?valuat|peer.*multiple/g],
+    ['NAV',        /\bnav\b|net.?asset.?value|sum.?of.?parts|\bsotp\b/g],
+    /* Numbered standards */
+    ['IFRS17', /ifrs\s*17/g],
+    ['IFRS16', /ifrs\s*16/g],
+    ['IFRS15', /ifrs\s*15/g],
+    ['IFRS18', /ifrs\s*18/g],
+    ['IFRS9',  /ifrs\s*9\b/g],
+    ['IFRS7',  /ifrs\s*7\b/g],
+    ['IAS38',  /ias\s*38\b/g],
+    ['IAS37',  /ias\s*37\b/g],
+    ['IAS36',  /ias\s*36\b/g],
+    ['IAS19',  /ias\s*19\b/g],
+    ['IAS16',  /ias\s*16\b/g],
+    ['IAS12',  /ias\s*12\b/g],
+    ['IAS2',   /ias\s*2\b/g],
+    ['DCF',    /\bdcf\b|discounted.*cash.*flow|\bwacc\b|terminal.*value/g],
+    ['LBO',    /\blbo\b|leveraged.?buy/g],
+  ];
+  patterns.forEach(function(pair){
+    var m=p.match(pair[1]);
+    if(m) scores[pair[0]]=m.length;
+  });
+  /* Find winner */
+  var best='DCF', bestScore=0;
+  Object.keys(scores).forEach(function(k){
+    if(scores[k]>bestScore){bestScore=scores[k];best=k;}
+  });
+  if(bestScore>0) return best;
+  /* Generic keyword fallbacks (no standard number found) */
+  if(/pension|defined.?benefit|actuari/.test(p)) return 'IAS19';
+  if(/impairment|value.?in.?use|\bcgu\b/.test(p)) return 'IAS36';
+  if(/provision|warranty|onerous/.test(p)) return 'IAS37';
+  if(/intangible|\br&d\b|development.?cost/.test(p)) return 'IAS38';
+  if(/deferred.?tax|temp.*diff/.test(p)) return 'IAS12';
+  if(/inventor(y|ies)|\bfifo\b/.test(p)) return 'IAS2';
+  if(/\becl\b|expected.?credit|stage\s*[123]/.test(p)) return 'IFRS9';
+  if(/\blease\b|right.?of.?use|\bibr\b/.test(p)) return 'IFRS16';
+  if(/insurance|\bcsm\b/.test(p)) return 'IFRS17';
+  if(/revenue.?recog|perf.*oblig/.test(p)) return 'IFRS15';
+  if(/prop.*plant|\bppe\b|asset.?cost|useful.?life/.test(p)) return 'IAS16';
+  if(/\bwacc\b|\bebitda\b|terminal.?value/.test(p)) return 'DCF';
   return 'DCF';
 }
 function parseYrs(p){
@@ -2831,24 +2889,737 @@ function computeLBO(n,sy){
 /* ═══════════════════════════════════════════════════════════════════════
    ROUTER
 ═══════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   NEW MODEL BLOCK — appended to FinModel_AI
+   Models: DDM, COMPS, NAV, IAS12-BS, IFRS9-HEDGE, IFRS9-C&M,
+           IFRS16-MOD, IFRS3, IFRS10, IFRS3-STEP
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ── VALUATION 2: Dividend Discount Model ─────────────────────────────*/
+function buildDDM(p){
+  var n=parseYrs(p), sy=parseSY(p);
+  freshASM({
+    eps1:      {label:'EPS Year 1 (USD)',              value:3.50,  unit:'USD'},
+    epsGrowth: {label:'EPS Growth Rate Phase 1 %',     value:15,    unit:'%'},
+    payoutR:   {label:'Dividend Payout Ratio %',       value:35,    unit:'%'},
+    termGrowth:{label:'Terminal Dividend Growth Rate %',value:3.5,  unit:'%'},
+    ke:        {label:'Cost of Equity (Ke) %',         value:10.5,  unit:'%'},
+    betaS:     {label:'Beta (Systematic Risk)',         value:1.15,  unit:''},
+    rfRate:    {label:'Risk-Free Rate %',               value:4.5,   unit:'%'},
+    erp:       {label:'Equity Risk Premium %',          value:5.5,   unit:'%'},
+    startYear: {label:'Start Year',                     value:sy,    unit:''},
+  });
+  return computeDDM(n,sy);
+}
+function computeDDM(n,sy){
+  var ke=a('ke')/100, tg=a('termGrowth')/100, g=a('epsGrowth')/100;
+  var eps=rpt(n,function(i){return r2(a('eps1')*Math.pow(1+g,i));});
+  var dps=eps.map(function(e){return r2(e*a('payoutR')/100);});
+  var df=rpt(n,function(i){return r4(1/Math.pow(1+ke,i+1));});
+  var pvDps=dps.map(function(d,i){return r2(d*df[i]);});
+  var sumPV=r2(pvDps.reduce(function(s,x){return s+x;},0));
+  var termDPS=r2(dps[n-1]*(1+tg));
+  var tv=r2(termDPS/(ke-tg));
+  var pvTV=r2(tv*df[n-1]);
+  var intrinsic=r2(sumPV+pvTV);
+  /* CAPM check */
+  var keCapm=r2(a('rfRate')+a('betaS')*a('erp'));
+  var dvYld=rpt(n,function(i){return r2(dps[i]/intrinsic*100);});
+  return {
+    modelType:'Dividend Discount Model (DDM)',
+    ifrsStandard:'DDM',
+    description:'Gordon Growth + multi-stage DDM | Ke '+a('ke')+'% | TGR '+a('termGrowth')+'% | '+n+' yr explicit period',
+    currency:'USD',layout:'timeseries',
+    tableHeaders:yHdrs(n,sy),
+    tableRows:[
+      sh('── EARNINGS & DIVIDEND FORECAST ──────────────────'),
+      dr('Earnings Per Share (EPS)',eps,{dp:2}),
+      dr('Dividend Payout Ratio %',fill(n,a('payoutR')),{pct:true}),
+      dr('Dividends Per Share (DPS)',dps,{dp:2}),
+      sh('── DISCOUNTING ─────────────────────────────────────'),
+      dr('Discount Factor (Ke '+a('ke')+'%)',df,{dp:4}),
+      dr('PV of DPS',pvDps,{dp:2}),
+      sh('── VALUATION BRIDGE ────────────────────────────────'),
+      tr('Sum of PV Dividends',fill(n,null).map(function(_,i){return i===n-1?sumPV:null;}),{dp:2}),
+      tr('Terminal Value (Gordon: DPS×(1+g)/(Ke−g))',fill(n,null).map(function(_,i){return i===n-1?tv:null;}),{dp:2}),
+      tr('PV of Terminal Value',fill(n,null).map(function(_,i){return i===n-1?pvTV:null;}),{dp:2}),
+      tr('Intrinsic Value Per Share',fill(n,intrinsic),{dp:2}),
+      sh('── CAPM COST OF EQUITY CHECK ─────────────────────'),
+      dr('Rf + β × ERP = Ke (CAPM)',fill(n,keCapm),{dp:2}),
+      dr('Dividend Yield %',dvYld,{pct:true}),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'DDM intrinsic value: $'+intrinsic+'/share. PV of explicit dividends: $'+sumPV+'. Terminal value contributes $'+pvTV+' ('+r1(pvTV/intrinsic*100)+'%). CAPM Ke check: '+keCapm+'% vs model Ke '+a('ke')+'%.',
+      keyFindings:['Intrinsic value: $'+intrinsic,'PV explicit dividends: $'+sumPV+' ('+r1(sumPV/intrinsic*100)+'% of value)','PV terminal value: $'+pvTV+' ('+r1(pvTV/intrinsic*100)+'% of value)','Terminal DPS used in Gordon model: $'+termDPS],
+      risks:['Terminal growth > Ke creates division by zero — ensure TGR < Ke','High payout ratio + high growth may be unsustainable','DDM appropriate only for dividend-paying companies with predictable payout policy'],
+      recommendations:['Cross-check vs DCF / COMPS','Run sensitivity: Ke ±100bps, TGR ±50bps','If payout volatile, use normalised payout ratio']
+    },
+    ifrsNotes:[
+      {title:'DDM & IFRS 9 Fair Value (IFRS 13)',content:'When equity instruments are measured at FV through OCI (IFRS 9.4.1.4), the DDM supports Level 3 fair value estimation where market data unavailable. Terminal value sensitivity must be disclosed (IFRS 13.93(h)).'},
+      {title:'CAPM Parameters',content:'Risk-free rate: government bond yield matching forecast horizon. ERP: market consensus (Damodaran/Duff & Phelps). Beta: re-levered using Hamada equation if capital structure differs from comparables.'},
+    ]
+  };
+}
+
+/* ── VALUATION 3: Trading Comps / Relative Valuation ─────────────────*/
+function buildCOMPS(p){
+  var sy=parseSY(p);
+  freshASM({
+    subjectEBITDA: {label:'Subject Company EBITDA ($M)',    value:45.0,  unit:'$M'},
+    subjectRev:    {label:'Subject Company Revenue ($M)',   value:220.0, unit:'$M'},
+    subjectEBIT:   {label:'Subject Company EBIT ($M)',      value:32.0,  unit:'$M'},
+    subjectNI:     {label:'Subject Company Net Income ($M)',value:22.5,  unit:'$M'},
+    subjectBV:     {label:'Subject Company Book Value ($M)',value:180.0, unit:'$M'},
+    subjectShares: {label:'Shares Outstanding (M)',         value:50.0,  unit:'M'},
+    subjectNetDebt:{label:'Net Debt ($M)',                  value:80.0,  unit:'$M'},
+    /* Comparable multiples — median of peer set */
+    evEBITDA:      {label:'Peer Median EV/EBITDA (x)',      value:9.5,   unit:'x'},
+    evEBITDA_lo:   {label:'Peer Low EV/EBITDA (x)',         value:7.5,   unit:'x'},
+    evEBITDA_hi:   {label:'Peer High EV/EBITDA (x)',        value:12.0,  unit:'x'},
+    evRev:         {label:'Peer Median EV/Revenue (x)',     value:2.1,   unit:'x'},
+    pe:            {label:'Peer Median P/E (x)',            value:18.0,  unit:'x'},
+    pb:            {label:'Peer Median P/BV (x)',           value:2.8,   unit:'x'},
+    evEBIT:        {label:'Peer Median EV/EBIT (x)',        value:13.0,  unit:'x'},
+    controlPrem:   {label:'M&A Control Premium %',          value:25,    unit:'%'},
+    startYear:     {label:'Valuation Date Year',            value:sy,    unit:''},
+  });
+  return computeCOMPS(sy);
+}
+function computeCOMPS(sy){
+  /* Implied EVs */
+  var evByEBITDA=r1(a('subjectEBITDA')*a('evEBITDA'));
+  var evByEBITDA_lo=r1(a('subjectEBITDA')*a('evEBITDA_lo'));
+  var evByEBITDA_hi=r1(a('subjectEBITDA')*a('evEBITDA_hi'));
+  var evByRev=r1(a('subjectRev')*a('evRev'));
+  var evByEBIT=r1(a('subjectEBIT')*a('evEBIT'));
+  var equityByPE=r1(a('subjectNI')*a('pe'));
+  var equityByPB=r1(a('subjectBV')*a('pb'));
+  /* EV→Equity bridge */
+  var nd=a('subjectNetDebt');
+  var eqByEBITDA=r1(evByEBITDA-nd);
+  var eqByRev=r1(evByRev-nd);
+  var eqByEBIT=r1(evByEBIT-nd);
+  var shr=a('subjectShares');
+  /* Price per share */
+  var ppEBITDA=r2(eqByEBITDA/shr*1000); // $M → per share ×1000
+  var ppRev=r2(eqByRev/shr*1000);
+  var ppEBIT=r2(eqByEBIT/shr*1000);
+  var ppPE=r2(equityByPE/shr*1000);
+  var ppPB=r2(equityByPB/shr*1000);
+  /* Central estimate = mean of 5 methods */
+  var ppArr=[ppEBITDA,ppRev,ppEBIT,ppPE,ppPB];
+  var ppMean=r2(ppArr.reduce(function(s,x){return s+x;},0)/ppArr.length);
+  /* M&A price with control premium */
+  var ppMA=r2(ppMean*(1+a('controlPrem')/100));
+  /* Football field: use 5 cols */
+  var cols=['EV/EBITDA','EV/Rev','EV/EBIT','P/E','P/BV'];
+  return {
+    modelType:'Trading Comps — Relative Valuation',
+    ifrsStandard:'COMPS',
+    description:'5-metric peer comps | EV/EBITDA '+a('evEBITDA')+'x | P/E '+a('pe')+'x | '+shr+'M shares | Control premium '+a('controlPrem')+'%',
+    currency:'USD ($M)',layout:'snapshot',
+    tableHeaders:['METRIC','LOW','MEDIAN','HIGH','IMPLIED EV ($M)','IMPLIED EQ ($M)','PRICE/SHARE'],
+    tableRows:[
+      sh('── ENTERPRISE VALUE MULTIPLES ─────────────────────────'),
+      dr('EV / EBITDA  ($'+a('subjectEBITDA')+'M × multiple)',
+         [evByEBITDA_lo, evByEBITDA, evByEBITDA_hi, evByEBITDA, eqByEBITDA, ppEBITDA]),
+      dr('EV / Revenue ($'+a('subjectRev')+'M × '+a('evRev')+'x)',
+         [null, a('evRev'), null, evByRev, eqByRev, ppRev]),
+      dr('EV / EBIT    ($'+a('subjectEBIT')+'M × '+a('evEBIT')+'x)',
+         [null, a('evEBIT'), null, evByEBIT, eqByEBIT, ppEBIT]),
+      sh('── EQUITY MULTIPLES ────────────────────────────────────'),
+      dr('P / E (Earnings $'+a('subjectNI')+'M × '+a('pe')+'x)',
+         [null, a('pe'), null, null, equityByPE, ppPE]),
+      dr('P / BV (Book $'+a('subjectBV')+'M × '+a('pb')+'x)',
+         [null, a('pb'), null, null, equityByPB, ppPB]),
+      sh('── VALUATION SUMMARY ───────────────────────────────────'),
+      tr('Central Estimate (Mean of 5 Methods)',
+         [null, null, null, null, null, ppMean]),
+      tr('M&A Takeout Price (+ '+a('controlPrem')+'% Control Premium)',
+         [null, null, null, null, null, ppMA]),
+      sh('── EV/EBITDA RANGE SENSITIVITY ────────────────────────'),
+      dr('EV at '+a('evEBITDA_lo')+'x (Low)',  [evByEBITDA_lo,null,null,null,null,null]),
+      dr('EV at '+a('evEBITDA')+'x (Median)',  [evByEBITDA,null,null,null,null,null]),
+      dr('EV at '+a('evEBITDA_hi')+'x (High)', [evByEBITDA_hi,null,null,null,null,null]),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'Central equity value: $'+r1(ppMean*shr/1000)+'M ($'+ppMean+'/share). EV/EBITDA range: $'+evByEBITDA_lo+'M–$'+evByEBITDA_hi+'M. M&A takeout at '+a('controlPrem')+'% premium: $'+ppMA+'/share.',
+      keyFindings:['Central equity: $'+ppMean+'/share (mean of 5 comps metrics)','EV/EBITDA median implied EV: $'+evByEBITDA+'M','M&A price (control premium): $'+ppMA+'/share','Price dispersion across methods: $'+Math.min(...ppArr).toFixed(2)+' – $'+Math.max(...ppArr).toFixed(2)],
+      risks:['Comps multiples reflect market sentiment, not intrinsic value','Ensure peer set is truly comparable (size, geography, growth, margins)','Control premium varies significantly by deal structure and competitive dynamics'],
+      recommendations:['Use comps as cross-check vs DCF/DDM, not standalone','Adjust multiples for size premium (smaller co = lower multiple)','Disclose basis of peer selection and date of market data']
+    },
+    ifrsNotes:[
+      {title:'IFRS 13 Fair Value — Market Approach',content:'Trading comps = Level 2 fair value under IFRS 13 (observable inputs). Precedent transactions may be Level 3 if >12 months old or limited market activity. Disclose range of multiples, peer selection basis, and any adjustments for non-comparable attributes.'},
+      {title:'IAS 36 — Value in Use vs Fair Value Less Costs to Sell',content:'For impairment testing, FVLCTS may be estimated using comps multiples (market approach). If using EBITDA multiple, adjust for: normalised EBITDA, capital structure, minority stake discount. Document each adjustment with objective support.'},
+    ]
+  };
+}
+
+/* ── VALUATION 4: Net Asset Value / Sum-of-Parts ──────────────────────*/
+function buildNAV(p){
+  var sy=parseSY(p);
+  freshASM({
+    ppeCost:    {label:'PP&E — Fair Value ($M)',          value:85.0, unit:'$M'},
+    ppeBook:    {label:'PP&E — Book Value ($M)',          value:60.0, unit:'$M'},
+    intangibles:{label:'Intangibles — Fair Value ($M)',   value:30.0, unit:'$M'},
+    goodwill:   {label:'Goodwill (as reported, $M)',      value:15.0, unit:'$M'},
+    investments:{label:'Equity-Accounted Investments ($M)',value:20.0, unit:'$M'},
+    inventory:  {label:'Inventory — Fair Value ($M)',     value:18.0, unit:'$M'},
+    receivables:{label:'Receivables (net, $M)',           value:25.0, unit:'$M'},
+    cash:       {label:'Cash & Equivalents ($M)',         value:12.0, unit:'$M'},
+    otherAssets:{label:'Other Assets ($M)',               value:5.0,  unit:'$M'},
+    totalLiab:  {label:'Total Liabilities ($M)',          value:95.0, unit:'$M'},
+    contLiab:   {label:'Contingent Liabilities ($M)',     value:8.0,  unit:'$M'},
+    minorityInt:{label:'Minority Interest / NCI ($M)',    value:12.0, unit:'$M'},
+    shares:     {label:'Shares Outstanding (M)',          value:50.0, unit:'M'},
+    navDiscount:{label:'NAV Discount to Apply %',         value:15,   unit:'%'},
+    startYear:  {label:'Valuation Year',                  value:sy,   unit:''},
+  });
+  return computeNAV(sy);
+}
+function computeNAV(sy){
+  var totalAssetsFV=r1(a('ppeCost')+a('intangibles')+a('goodwill')+a('investments')+a('inventory')+a('receivables')+a('cash')+a('otherAssets'));
+  var ppeUplift=r1(a('ppeCost')-a('ppeBook'));
+  var grossNAV=r1(totalAssetsFV-a('totalLiab')-a('contLiab'));
+  var navToEquity=r1(grossNAV-a('minorityInt'));
+  var navPerShare=r2(navToEquity/a('shares')*1000);
+  var discountedNAV=r1(navToEquity*(1-a('navDiscount')/100));
+  var discNavPS=r2(discountedNAV/a('shares')*1000);
+  /* SOTP breakdown */
+  var cols=['BOOK VALUE ($M)','FAIR VALUE ($M)','UPLIFT ($M)','% OF TOTAL FV'];
+  return {
+    modelType:'Net Asset Value (NAV) / Sum-of-Parts',
+    ifrsStandard:'NAV',
+    description:'NAV = FV Assets − Liabilities − NCI | PP&E uplift $'+ppeUplift+'M | '+a('navDiscount')+'% discount applied',
+    currency:'USD ($M)',layout:'snapshot',
+    tableHeaders:['LINE ITEM','BOOK VALUE ($M)','FAIR VALUE ($M)','UPLIFT ($M)','% OF NAV'],
+    tableRows:[
+      sh('── FIXED / NON-CURRENT ASSETS ─────────────────────────'),
+      dr('PP&E (Tangible Fixed Assets)',[a('ppeBook'),a('ppeCost'),ppeUplift,r1(a('ppeCost')/totalAssetsFV*100)]),
+      dr('Intangible Assets (excl. Goodwill)',[0,a('intangibles'),a('intangibles'),r1(a('intangibles')/totalAssetsFV*100)]),
+      dr('Goodwill (impairment tested)',[a('goodwill'),a('goodwill'),0,r1(a('goodwill')/totalAssetsFV*100)]),
+      dr('Equity-Accounted Investments',[a('investments'),a('investments'),0,r1(a('investments')/totalAssetsFV*100)]),
+      sh('── CURRENT ASSETS ─────────────────────────────────────'),
+      dr('Inventory',[a('inventory'),a('inventory'),0,r1(a('inventory')/totalAssetsFV*100)]),
+      dr('Trade Receivables (net)',[a('receivables'),a('receivables'),0,r1(a('receivables')/totalAssetsFV*100)]),
+      dr('Cash & Cash Equivalents',[a('cash'),a('cash'),0,r1(a('cash')/totalAssetsFV*100)]),
+      dr('Other Assets',[a('otherAssets'),a('otherAssets'),0,r1(a('otherAssets')/totalAssetsFV*100)]),
+      tr('TOTAL ASSETS (Fair Value)',[null,totalAssetsFV,ppeUplift,100.0]),
+      sh('── LIABILITIES & DEDUCTIONS ────────────────────────────'),
+      dr('Total Liabilities',[null,-a('totalLiab'),null,null]),
+      dr('Contingent Liabilities (Identified)',[null,-a('contLiab'),null,null]),
+      tr('GROSS NAV (FV Assets − All Liabilities)',[null,grossNAV,null,null]),
+      dr('Less: Non-Controlling Interest (NCI)',[null,-a('minorityInt'),null,null]),
+      tr('NAV Attributable to Equity Holders',[null,navToEquity,null,null]),
+      sh('── PER SHARE & DISCOUNT ────────────────────────────────'),
+      tr('NAV Per Share (USD)',[null,navPerShare,null,null]),
+      dr('NAV Discount Applied %',[null,a('navDiscount'),null,null]),
+      tr('Discounted NAV (Equity, $M)',[null,discountedNAV,null,null]),
+      tr('Discounted NAV Per Share (USD)',[null,discNavPS,null,null]),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'Gross NAV: $'+grossNAV+'M. NAV per share: $'+navPerShare+'. After '+a('navDiscount')+'% discount: $'+discNavPS+'/share. PP&E fair value uplift: $'+ppeUplift+'M (key driver).',
+      keyFindings:['Gross NAV: $'+grossNAV+'M | Net to equity: $'+navToEquity+'M','NAV/share: $'+navPerShare+' | Post-discount: $'+discNavPS,'PP&E FV uplift: $'+ppeUplift+'M (most material adjustment)','NCI deduction: $'+a('minorityInt')+'M'],
+      risks:['PP&E fair value requires independent appraisal (RICS/IVS standard)','Intangible FV highly model-dependent — license to Level 3 risk','NAV discount reflects liquidity, control, and marketability discounts'],
+      recommendations:['Commission independent property/asset appraisal for PP&E','Apply IVSC/RICS valuation standards for intangibles','Document NAV discount basis with empirical closed-end fund data']
+    },
+    ifrsNotes:[
+      {title:'IFRS 3 — Fair Value at Acquisition Date',content:'In a business combination, all identifiable assets and liabilities measured at fair value at acquisition date (IFRS 3.18). PP&E uplift recognised in PPA; amortised over remaining useful life. Goodwill = Consideration − FV Net Assets (IFRS 3.32). Contingent liabilities recognised if present obligation and fair value can be reliably measured.'},
+      {title:'IAS 36 — Goodwill Impairment',content:'Goodwill not amortised — tested annually for impairment (IAS 36.80). Allocate to CGUs. Recoverable amount = higher of FV less CTS and Value in Use. NAV provides one input to FVLCTS for CGU-level impairment testing.'},
+    ]
+  };
+}
+
+/* ── IAS 12 — Balance Sheet Approach ─────────────────────────────────*/
+function buildIAS12BS(p){
+  var n=parseYrs(p), sy=parseSY(p);
+  freshASM({
+    /* Asset carrying amounts */
+    ppeCarrying:  {label:'PP&E Carrying Amount (IFRS)',    value:5000000, unit:'USD'},
+    ppeTaxBase:   {label:'PP&E Tax Base',                  value:3200000, unit:'USD'},
+    ifrs16ROU:    {label:'IFRS 16 ROU Asset Carrying Amt', value:1800000, unit:'USD'},
+    ifrs16Liab:   {label:'IFRS 16 Lease Liability',        value:1950000, unit:'USD'},
+    receivables:  {label:'Receivables Carrying Amount',    value:2500000, unit:'USD'},
+    recTaxBase:   {label:'Receivables Tax Base',           value:2200000, unit:'USD'},
+    inventory2:   {label:'Inventory Carrying Amount',      value:1200000, unit:'USD'},
+    invTaxBase:   {label:'Inventory Tax Base',             value:1200000, unit:'USD'},
+    provisions2:  {label:'Provisions Carrying Amt (liab)', value:800000,  unit:'USD'},
+    provTaxBase:  {label:'Provisions Tax Base',            value:0,       unit:'USD'},
+    lossCarryFwd: {label:'Tax Loss Carry-Forward',         value:500000,  unit:'USD'},
+    futTaxRate2:  {label:'Enacted Tax Rate %',             value:28,      unit:'%'},
+    startYear:    {label:'Start Year',                     value:sy,      unit:''},
+  });
+  return computeIAS12BS(n,sy);
+}
+function computeIAS12BS(n,sy){
+  var rate=a('futTaxRate2')/100;
+  /* Each row: carrying amt, tax base, temp diff, DTA(+)/DTL(-) */
+  var rows_data=[
+    /* [label, carrying, taxBase, isDTL_if_positive] */
+    ['PP&E', a('ppeCarrying'), a('ppeTaxBase'), true],
+    ['IFRS 16 ROU Asset', a('ifrs16ROU'), 0, true],
+    ['IFRS 16 Lease Liability (offsets)', a('ifrs16Liab'), 0, false],
+    ['Trade Receivables', a('receivables'), a('recTaxBase'), false],
+    ['Inventory', a('inventory2'), a('invTaxBase'), false],
+    ['Provisions (Liability)', a('provisions2'), a('provTaxBase'), false],
+    ['Tax Loss Carry-forward', a('lossCarryFwd'), 0, false],
+  ];
+  var totalDTL=0, totalDTA=0;
+  var tableRows=[sh('── TEMPORARY DIFFERENCE ANALYSIS (IAS 12 — Balance Sheet Approach) ──')];
+  rows_data.forEach(function(rd){
+    var lbl=rd[0], ca=rd[1], tb=rd[2], isDTLIfPos=rd[3];
+    var tempDiff=ca-tb;
+    var dtlAmt=0, dtaAmt=0;
+    if(isDTLIfPos){
+      if(tempDiff>0){dtlAmt=r0(tempDiff*rate);} else {dtaAmt=r0(-tempDiff*rate);}
+    } else {
+      if(tempDiff<0){dtlAmt=r0(-tempDiff*rate);} else {dtaAmt=r0(tempDiff*rate);}
+    }
+    totalDTL-=dtlAmt; totalDTA+=dtaAmt;
+    tableRows.push(dr(lbl,[ca, tb, ca-tb, dtlAmt?-dtlAmt:0, dtaAmt?dtaAmt:0]));
+  });
+  var netPos=r0(totalDTA+totalDTL);
+  tableRows.push(tr('TOTAL DTA / (DTL)',[null,null,null,totalDTL,totalDTA]));
+  tableRows.push(tr('NET DEFERRED TAX POSITION',[null,null,null,null,netPos]));
+  /* Now build a 5-year roll-forward (simplified) */
+  tableRows.push(sh('── MULTI-YEAR DEFERRED TAX ROLL-FORWARD ──────────────────────────'));
+  var openDTL=totalDTL, openDTA=totalDTA;
+  var cols5=yHdrs(n,sy);
+  var rollDTL=rpt(n,function(i){return r0(openDTL*Math.pow(0.92,i+1));});
+  var rollDTA=rpt(n,function(i){return r0(openDTA*Math.pow(0.90,i+1));});
+  var rollNet=rollDTL.map(function(d,i){return r0(d+rollDTA[i]);});
+  tableRows.push(dr('DTL Balance (reversal schedule)',rollDTL));
+  tableRows.push(dr('DTA Balance (utilisation schedule)',rollDTA));
+  tableRows.push(tr('Net DT Position',rollNet));
+  tableRows.push(dr('Movement (Deferred Tax Charge)/Credit',rollNet.map(function(n2,i){return i===0?r0(n2-netPos):r0(n2-rollNet[i-1]);})));
+  return {
+    modelType:'IAS 12 — Deferred Tax (Balance Sheet Approach)',
+    ifrsStandard:'IAS12BS',
+    description:'Balance Sheet approach | Carrying amt vs Tax base | Temp diffs | Rate '+a('futTaxRate2')+'%',
+    currency:'USD',layout:'snapshot',
+    tableHeaders:['LINE ITEM','CARRYING AMT','TAX BASE','TEMP DIFF','DTL (-)','DTA (+)'],
+    tableRows:tableRows,
+    assumptions:ASM,
+    analysis:{
+      summary:'Net deferred tax: $'+netPos+'. Total DTL: $'+totalDTL+'. Total DTA: $'+totalDTA+'. Applied enacted rate: '+a('futTaxRate2')+'%. Balance Sheet approach identifies temp diffs at asset/liability level, then measures DTA/DTL.',
+      keyFindings:['Net DT position: $'+netPos,'Total DTL recognised: $'+Math.abs(totalDTL),'Total DTA recognised: $'+totalDTA,'Key driver: PP&E carrying amt $'+a('ppeCarrying')+' vs tax base $'+a('ppeTaxBase')],
+      risks:['IAS 12.15: initial recognition exemption — temp diffs arising on initial recognition of asset/liability not in business combination are excluded','DTA recoverability: future taxable profits must be probable (IAS 12.24)'],
+      recommendations:['Reconcile P&L approach vs Balance Sheet approach — should produce same net position','Maintain itemised temp diff schedule by asset/liability class','Disclose unrecognised deferred tax (IAS 12.81)']
+    },
+    ifrsNotes:[
+      {title:'IAS 12 — Balance Sheet vs P&L Approach',content:'IAS 12 mandates the Balance Sheet (Liability) approach. Deferred tax arises from temporary differences = carrying amount under IFRS minus tax base. P&L approach (tracking timing differences between accounting and taxable profit) can produce the same result but is not permitted as a standalone method under IAS 12.'},
+      {title:'IFRS 16 — Deferred Tax on Leases (IAS 12.15 Exception)',content:'The initial recognition exemption (IAS 12.15) does NOT apply to IFRS 16 leases: both the ROU asset (creates DTL if higher carrying amt) and Lease Liability (creates DTA if deductible on payment) are recognised. IAS 12.BC8E confirms symmetric recognition for ROU asset and lease liability.'},
+    ]
+  };
+}
+
+/* ── IFRS 9 — Hedge Accounting ────────────────────────────────────────*/
+function buildIFRS9HEDGE(p){
+  var n=parseYrs(p), sy=parseSY(p);
+  freshASM({
+    hedgeType:    {label:'Hedge Type (1=CFH 2=FVH 3=NIH)',  value:1,        unit:''},
+    notional:     {label:'Hedging Instrument Notional ($)', value:10000000, unit:'USD'},
+    strikeRate:   {label:'Contracted Fixed Rate / Strike %',value:5.0,      unit:'%'},
+    spotRate:     {label:'Current Market Rate %',           value:6.5,      unit:'%'},
+    hedgedItem:   {label:'Hedged Item FV / Principal ($)',  value:10000000, unit:'USD'},
+    hedgeRatio:   {label:'Hedge Ratio %',                   value:100,      unit:'%'},
+    effectiveness:{label:'Hedge Effectiveness % (test)',    value:95,       unit:'%'},
+    startYear:    {label:'Start Year',                      value:sy,       unit:''},
+  });
+  return computeIFRS9HEDGE(n,sy);
+}
+function computeIFRS9HEDGE(n,sy){
+  var hType=Math.round(a('hedgeType'));
+  var notional=a('notional'), strike=a('strikeRate')/100, spot=a('spotRate')/100;
+  var hedgeLabels=['','Cash Flow Hedge (CFH)','Fair Value Hedge (FVH)','Net Investment Hedge (NIH)'];
+  var hLabel=hedgeLabels[hType]||'Cash Flow Hedge';
+  /* Instrument FV = PV of (market-fixed) rate differential */
+  var rDiff=spot-strike;
+  var instrFV=rpt(n,function(i){
+    var yrs=n-i;
+    var pv=notional*rDiff*(1-Math.pow(1+spot,-yrs))/spot;
+    return r0(pv);
+  });
+  /* Effectiveness */
+  var eff=a('effectiveness')/100;
+  var effPortion=instrFV.map(function(v){return r0(v*eff);});
+  var ineffPortion=instrFV.map(function(v){return r0(v*(1-eff));});
+  /* CFH: effective → OCI, ineffective → P&L */
+  /* FVH: both instrument and hedged item FV changes go to P&L */
+  var ociAmt=hType===1?effPortion:zeros(n);
+  var plAmt =hType===1?ineffPortion:instrFV;
+  var hedgedFVChg=rpt(n,function(i){return r0(-a('hedgedItem')*rDiff*(n-i)/n);});
+  var netPL=hType===2?plAmt.map(function(v,i){return r0(v+hedgedFVChg[i]);}):plAmt;
+  return {
+    modelType:'IFRS 9 — Hedge Accounting ('+hLabel+')',
+    ifrsStandard:'IFRS9HEDGE',
+    description:hLabel+' | Notional $'+notional+' | Strike '+a('strikeRate')+'% | Spot '+a('spotRate')+'% | Effectiveness '+a('effectiveness')+'%',
+    currency:'USD',layout:'timeseries',
+    tableHeaders:yHdrs(n,sy),
+    tableRows:[
+      sh('── HEDGING INSTRUMENT ──────────────────────────────────'),
+      dr('Notional Amount',fill(n,notional)),
+      dr('Rate Differential (Spot − Strike) %',fill(n,r2(rDiff*100))),
+      dr('Instrument Fair Value (Mark-to-Market)',instrFV),
+      sh('── EFFECTIVENESS TESTING ───────────────────────────────'),
+      dr('Effectiveness % (80–125% corridor)',fill(n,a('effectiveness'))),
+      dr('Effective Portion of FV Change',effPortion),
+      dr('Ineffective Portion of FV Change',ineffPortion),
+      sh('── ACCOUNTING TREATMENT ('+hLabel+') ────────────────────'),
+      dr(hType===1?'Effective Portion → OCI (CFH Reserve)':hType===2?'Instrument FV Gain/(Loss) → P&L':'Effective Portion → Translation Reserve',ociAmt),
+      dr('Ineffective Portion → P&L (always)',hType===1?ineffPortion:zeros(n)),
+      hType===2?dr('Hedged Item FV Change → P&L (offsetting)',hedgedFVChg):sh('N/A for Cash Flow / Net Investment Hedges'),
+      tr('Net P&L Impact',netPL),
+      sh('── HEDGE DOCUMENTATION (IFRS 9.6.4) ──────────────────'),
+      dr('Hedge Ratio',fill(n,a('hedgeRatio'))),
+      dr('Rebalancing Required if ratio drifts?',fill(n,a('hedgeRatio')===100?0:1)),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:hLabel+': instrument FV Y1 = $'+instrFV[0]+'. Effective portion to OCI: $'+ociAmt[0]+'. P&L charge: $'+netPL[0]+'. Hedge effectiveness '+a('effectiveness')+'% — within 80–125% corridor.',
+      keyFindings:['Hedge type: '+hLabel,'Instrument MTM Y1: $'+instrFV[0],'Effective portion: '+a('effectiveness')+'% | OCI: $'+ociAmt[0],'Net P&L Y1: $'+netPL[0]],
+      risks:['Effectiveness < 80% or > 125% → hedge designation fails → all MTM to P&L','Rate differential widens → DTL on instrument may require collateral','NIH hedges: OCI balance reclassified to P&L on disposal of foreign operation'],
+      recommendations:['Document hedge designation at inception (IFRS 9.6.4.1)','Perform effectiveness tests at each reporting date','If effectiveness fails, discontinue prospectively and reclassify OCI balance']
+    },
+    ifrsNotes:[
+      {title:'Hedge Accounting Types (IFRS 9.6.5)',content:'(1) Fair Value Hedge: exposure to changes in FV of recognised asset/liability or firm commitment — both hedging instrument and hedged item FV changes to P&L. (2) Cash Flow Hedge: exposure to variability in cash flows — effective portion to OCI, reclassified to P&L when hedged item affects P&L. (3) Net Investment Hedge: hedge of currency exposure in foreign operation — treated as cash flow hedge; OCI released on disposal.'},
+      {title:'Hedge Effectiveness (IFRS 9.6.4)',content:'Hedge must meet: (a) economic relationship between hedged item and instrument; (b) credit risk does not dominate; (c) hedge ratio is same as actual quantity hedged. Effectiveness no longer tested on 80–125% retrospective basis — instead, economic relationship documented qualitatively or quantitatively. If hedge ratio changes, rebalancing required (not discontinuation).'},
+    ]
+  };
+}
+
+/* ── IFRS 9 — Classification & Measurement (C&M) ─────────────────────*/
+function buildIFRS9CM(p){
+  var sy=parseSY(p);
+  freshASM({
+    instName1:   {label:'Instrument 1 Name/Type',         value:1,        unit:'(1=Bond 2=Equity 3=Loan)'},
+    fvInst1:     {label:'Instrument 1 Fair Value ($)',     value:1500000,  unit:'USD'},
+    coupon1:     {label:'Instrument 1 Coupon/Yield %',     value:5.5,      unit:'%'},
+    instName2:   {label:'Instrument 2 Name/Type',         value:2,        unit:'(1=Bond 2=Equity 3=Loan)'},
+    fvInst2:     {label:'Instrument 2 Fair Value ($)',     value:500000,   unit:'USD'},
+    inst2OCI:    {label:'Equity Inst 2 → FVOCI Irrev? (1=Y)', value:1,   unit:''},
+    inst3FV:     {label:'Loan Portfolio FV ($)',           value:3000000,  unit:'USD'},
+    inst3Amort:  {label:'Loan Portfolio Amortised Cost ($)',value:2950000, unit:'USD'},
+    startYear:   {label:'Valuation Year',                  value:sy,       unit:''},
+  });
+  return computeIFRS9CM(sy);
+  }
+function computeIFRS9CM(sy){
+  /* Classification decision tree */
+  var bond_bm=a('fvInst1'), bond_fvpl=r0(bond_bm*1.02); /* slight FV diff */
+  var eq_fv=a('fvInst2');
+  var eq_oci_flag=Math.round(a('inst2OCI'))===1;
+  var loan_ac=a('inst3Amort'), loan_fv=a('inst3FV');
+  var fvDiff=r0(loan_fv-loan_ac);
+  return {
+    modelType:'IFRS 9 — Classification & Measurement',
+    ifrsStandard:'IFRS9CM',
+    description:'C&M decision tree: Debt (SPPI test) + Business Model | Equity (FVPL vs FVOCI irrevocable) | Loan ECL',
+    currency:'USD',layout:'snapshot',
+    tableHeaders:['INSTRUMENT','SPPI TEST','BUSINESS MODEL','CLASSIFICATION','CARRYING AMT ($)','GAIN/LOSS ROUTING'],
+    tableRows:[
+      sh('── DEBT INSTRUMENTS (IFRS 9.4.1) ──────────────────────'),
+      dr('Bond / Fixed Income (Instrument 1)',[1,'Pass','Hold to Collect','Amortised Cost',a('fvInst1'),'EIR interest → P&L | No FV remeasurement']),
+      dr('Bond held for trading',[1,'Pass','Hold to Sell','FVTPL',bond_fvpl,'All FV changes → P&L']),
+      dr('Bond — hold & sell mixed portfolio',[1,'Pass','Both','FVTOCI',a('fvInst1'),'Interest+ECL → P&L | FV changes → OCI | Recycled']),
+      sh('── EQUITY INSTRUMENTS (IFRS 9.4.1.4) ──────────────────'),
+      dr('Listed Equity (default)',[0,'N/A (equity)','N/A','FVTPL',eq_fv,'All FV changes → P&L | No recycling']),
+      dr('Equity with FVOCI election (irrevocable)',[0,'N/A','N/A',eq_oci_flag?'FVTOCI (IFRS 9.4.1.4)':'FVTPL (no election)',eq_fv,eq_oci_flag?'FV changes → OCI | Dividends → P&L | NO recycling':'All FV changes → P&L']),
+      sh('── LOANS & RECEIVABLES ──────────────────────────────────'),
+      dr('Loan Portfolio — SPPI + HTC model',[1,'Pass','Hold to Collect','Amortised Cost',loan_ac,'EIR → P&L | ECL impairment → P&L']),
+      dr('Loan FV vs Amortised Cost',['—','—','—','FV Disclosure',loan_fv,'Diff: $'+fvDiff+' — IFRS 7.29 disclosure']),
+      sh('── RECLASSIFICATION RULES (IFRS 9.4.4) ──────────────────'),
+      dr('Debt: reclassify if business model changes',['—','—','Permitted if BM changes','Prospective',0,'No gain/loss recognised on reclassification']),
+      dr('Equity: reclassify (FVTPL ↔ FVTOCI)',['—','—','NOT permitted','Irrevocable election',0,'OCI balance stays in equity — no P&L transfer ever']),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'C&M framework: Debt classified by SPPI test × Business Model matrix. Equity defaults to FVTPL; irrevocable FVOCI election available (no recycling). Loan portfolio at amortised cost: $'+loan_ac+' vs FV $'+loan_fv+' (diff $'+fvDiff+').',
+      keyFindings:['Bond (HTC+SPPI): Amortised Cost','Bond (HTS+SPPI): FVTPL','Equity FVOCI election applied: '+eq_oci_flag,'Loan portfolio: Amortised Cost | ECL staging applies'],
+      risks:['SPPI failure (e.g. leverage features, contingent cash flows) → mandatory FVTPL','Business model assessment at portfolio level — individual instrument cannot override','FVOCI equity election: OCI balance never recycled to P&L (even on disposal)'],
+      recommendations:['Document business model at portfolio inception','Run SPPI tests on each instrument class — benchmark test for modified instruments','Review FVO for financial liabilities: own credit risk changes → OCI (IFRS 9.5.7.7)']
+    },
+    ifrsNotes:[
+      {title:'SPPI Test (IFRS 9.4.1.1–4.1.3)',content:'Solely Payments of Principal and Interest. Fails if: leverage, inverse floating, equity-linked, or terms not reflective of credit risk. Modified time value of money feature: benchmark test required. If fails → mandatory FVTPL.'},
+      {title:'Business Model (IFRS 9.B4.1.1)',content:'(1) Hold to Collect: contractual CF only → Amortised Cost. (2) Hold to Collect & Sell: → FVTOCI. (3) All other: → FVTPL. Assessment based on facts and circumstances at portfolio level. Sales of financial assets are not automatically inconsistent with HTC model if infrequent/insignificant.'},
+    ]
+  };
+}
+
+/* ── IFRS 16 — Lease Modification & Reassessment ─────────────────────*/
+function buildIFRS16MOD(p){
+  var n=parseYrs(p), sy=parseSY(p);
+  freshASM({
+    origPmt:    {label:'Original Annual Payment ($)',    value:120000,  unit:'USD'},
+    origIBR:    {label:'Original IBR %',                 value:5.5,     unit:'%'},
+    origTerm:   {label:'Original Lease Term (yrs)',      value:5,       unit:'yrs'},
+    modYear:    {label:'Modification Occurs (Year No.)', value:2,       unit:''},
+    modType:    {label:'Mod Type (1=Extend 2=Reduce 3=PayChg)', value:1, unit:''},
+    newTerm:    {label:'New Total Term After Mod (yrs)', value:8,       unit:'yrs'},
+    newPmt:     {label:'New Annual Payment After Mod ($)',value:130000, unit:'USD'},
+    revisedIBR: {label:'Revised IBR at Mod Date %',     value:6.0,     unit:'%'},
+    startYear:  {label:'Start Year',                     value:sy,      unit:''},
+  });
+  return computeIFRS16MOD(n,sy);
+}
+function computeIFRS16MOD(n,sy){
+  var oP=a('origPmt'), oR=a('origIBR')/100, oT=Math.round(a('origTerm'));
+  var modY=Math.round(a('modYear')), mT=Math.round(a('newTerm'));
+  var nP=a('newPmt'), nR=a('revisedIBR')/100;
+  var modType=Math.round(a('modType'));
+  /* Original lease liability at inception */
+  function pvAnnuity(pmt,rate,years){
+    if(rate===0) return pmt*years;
+    return pmt*(1-Math.pow(1+rate,-years))/rate;
+  }
+  var origLL=r0(pvAnnuity(oP,oR,oT));
+  /* Liability just before modification (after modY-1 years of repayment) */
+  var llBeforeMod=r0(pvAnnuity(oP,oR,oT-(modY-1)));
+  /* Remeasured liability at modification date */
+  var remainTerm=mT-(modY-1);
+  var newLL=r0(pvAnnuity(nP,nR,remainTerm));
+  var adjustment=r0(newLL-llBeforeMod);
+  /* Build year-by-year table */
+  var llBal=[origLL], rouBal=[origLL];
+  for(var yi=1;yi<n;yi++){
+    var prevLL=llBal[yi-1];
+    if(yi===modY-1){
+      /* Apply modification */
+      var interestBefore=r0(prevLL*oR);
+      var newLLval=newLL;
+      llBal.push(newLLval);
+      rouBal.push(r0(rouBal[yi-1]-origLL/oT+adjustment));
+    } else {
+      var rate2=yi<modY?oR:nR;
+      var pmt2=yi<modY?oP:nP;
+      var interest2=r0(prevLL*rate2);
+      llBal.push(r0(Math.max(0,prevLL+interest2-pmt2)));
+      rouBal.push(r0(Math.max(0,rouBal[yi-1]-origLL/oT)));
+    }
+  }
+  var depn=fill(n,-r0(origLL/oT));
+  var interest=llBal.map(function(b,i){return i<n-1?r0(b*(i<modY?oR:nR)):0;});
+  return {
+    modelType:'IFRS 16 — Lease Modification & Reassessment',
+    ifrsStandard:'IFRS16MOD',
+    description:'Mod type '+['','Extend term','Reduce scope','Payment change'][modType]+' | Mod at Yr '+modY+' | Orig IBR '+a('origIBR')+'% → Revised '+a('revisedIBR')+'%',
+    currency:'USD',layout:'timeseries',
+    tableHeaders:yHdrs(n,sy),
+    tableRows:[
+      sh('── ORIGINAL LEASE (PRE-MODIFICATION) ─────────────────'),
+      dr('Original Annual Payment',fill(n,oP).map(function(v,i){return i<modY?v:null;})),
+      dr('Original Lease Liability Balance',llBal.map(function(v,i){return i<modY?v:null;})),
+      sh('── MODIFICATION ACCOUNTING (IFRS 16.44–46) ────────────'),
+      dr('Liability Before Modification',fill(n,null).map(function(_,i){return i===modY-1?llBeforeMod:null;})),
+      dr('Remeasured Liability (new IBR, new term)',fill(n,null).map(function(_,i){return i===modY-1?newLL:null;})),
+      dr('Adjustment to ROU Asset / P&L',fill(n,null).map(function(_,i){return i===modY-1?adjustment:null;})),
+      sh('── POST-MODIFICATION SCHEDULE ─────────────────────────'),
+      dr('New Annual Payment',fill(n,nP).map(function(v,i){return i>=modY-1?v:null;})),
+      dr('Revised Lease Liability Balance',llBal),
+      dr('ROU Asset Balance',rouBal),
+      sh('── P&L IMPACT ─────────────────────────────────────────'),
+      dr('Depreciation (ROU Asset)',depn),
+      dr('Interest Expense (EIR method)',interest.map(function(v){return -v;})),
+      tr('Total Lease Cost',depn.map(function(d,i){return r0(d-interest[i]);})),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'Original LL at inception: $'+origLL+'. At modification (Yr '+modY+'): $'+llBeforeMod+'. Remeasured to $'+newLL+' (IBR '+a('revisedIBR')+'%). Adjustment: $'+adjustment+' to ROU asset.',
+      keyFindings:['Original LL: $'+origLL,'LL at modification date: $'+llBeforeMod,'Remeasured LL: $'+newLL,'ROU asset adjustment: $'+adjustment],
+      risks:['Scope decrease (IFRS 16.46(a)): partial de-recognition of ROU and LL — gain/loss to P&L','Scope increase treated as separate new lease if additional right-of-use obtained','Revision of non-lease components requires judgement on separation'],
+      recommendations:['Re-assess IBR at modification date (not original IBR for scope changes)','Document modification type (separate lease vs modification of existing lease)','Check if lessee practical expedients apply']
+    },
+    ifrsNotes:[
+      {title:'IFRS 16.44 — Lease Modifications',content:'Modification not accounted as separate lease when: (a) increases scope by adding right to use additional assets, AND (b) lease payments increase commensurate with standalone price. Otherwise: remeasure lease liability using revised discount rate; adjust ROU asset; differences to P&L only for scope decreases.'},
+      {title:'IFRS 16.40–43 — Reassessment (Not Modification)',content:'Reassessment (not modification) required when: lessee exercises or does not exercise purchase option contrary to previous assessment; significant event or change in circumstances affects likelihood of extension/termination option. Reassessment uses revised IBR at reassessment date.'},
+    ]
+  };
+}
+
+/* ── IFRS 3 — Business Combination / PPA ────────────────────────────*/
+function buildIFRS3(p){
+  var n=parseYrs(p), sy=parseSY(p);
+  freshASM({
+    consideration: {label:'Total Consideration Transferred ($M)', value:250, unit:'$M'},
+    nciMethod:     {label:'NCI Method (1=FV 2=Proportionate)',     value:1,   unit:''},
+    nciPct:        {label:'NCI % held by others',                  value:20,  unit:'%'},
+    fvNetAssets:   {label:'FV of Net Identifiable Assets ($M)',    value:180, unit:'$M'},
+    ppeUplifted:   {label:'PP&E FV Uplift ($M)',                   value:25,  unit:'$M'},
+    intangPPA:     {label:'PPA Intangibles Identified ($M)',       value:35,  unit:'$M'},
+    intangLife:    {label:'PPA Intangibles Useful Life (yrs)',     value:7,   unit:'yrs'},
+    ppeLiveRem:    {label:'PP&E Remaining Life (yrs)',             value:10,  unit:'yrs'},
+    contingLiab:   {label:'Contingent Liabilities Recognised ($M)',value:5,   unit:'$M'},
+    preexRelation: {label:'Pre-existing Relationship Settlement ($M)',value:0, unit:'$M'},
+    startYear:     {label:'Acquisition Year',                       value:sy,  unit:''},
+  });
+  return computeIFRS3(n,sy);
+}
+function computeIFRS3(n,sy){
+  var cons=a('consideration'), nciM=Math.round(a('nciMethod'));
+  var nciPct=a('nciPct')/100, fvNA=a('fvNetAssets');
+  /* NCI at FV or proportionate share */
+  var nciVal=nciM===1?r1(cons*(nciPct/(1-nciPct))):r1(fvNA*nciPct);
+  /* Goodwill */
+  var goodwill=r1(cons+nciVal-fvNA);
+  var badBargain=goodwill<0;
+  var goodwillAdj=badBargain?0:goodwill;
+  var bargainGain=badBargain?-goodwill:0;
+  /* Post-acq amortisation */
+  var ppaAmort=rpt(n,function(i){return -r1(a('intangPPA')/a('intangLife'));});
+  var ppeAmort=rpt(n,function(i){return -r1(a('ppeUplifted')/a('ppeLiveRem'));});
+  /* PPA net assets roll */
+  var intangBal=rpt(n,function(i){return r1(Math.max(0,a('intangPPA')*(1-(i+1)/a('intangLife'))));});
+  var ppeBal=rpt(n,function(i){return r1(Math.max(0,a('ppeUplifted')*(1-(i+1)/a('ppeLiveRem'))));});
+  return {
+    modelType:'IFRS 3 — Business Combination (PPA & Goodwill)',
+    ifrsStandard:'IFRS3',
+    description:'Acquisition method | Consideration $'+cons+'M | NCI '+(nciM===1?'at FV':'proportionate')+'  | Goodwill $'+goodwillAdj+'M',
+    currency:'USD ($M)',layout:'timeseries',
+    tableHeaders:['ITEM'].concat(yHdrs(n,sy)),
+    tableRows:[
+      sh('── PURCHASE PRICE ALLOCATION (IFRS 3.18) ─────────────'),
+      dr('Total Consideration Transferred ($M)',fill(n,cons)),
+      dr('Non-Controlling Interest (NCI) ('+(nciM===1?'FV method':'Proportionate')+') ($M)',fill(n,nciVal)),
+      dr('Less: FV of Net Identifiable Assets ($M)',fill(n,-fvNA)),
+      tr(badBargain?'Bargain Purchase Gain (→ P&L immediately)':'Goodwill Recognised',fill(n,badBargain?bargainGain:goodwillAdj)),
+      sh('── FV NET ASSETS COMPOSITION ($M) ─────────────────────'),
+      dr('PP&E Fair Value Uplift',fill(n,a('ppeUplifted'))),
+      dr('PPA Intangibles (customer relationships, brand, etc.)',fill(n,a('intangPPA'))),
+      dr('Contingent Liabilities Recognised',fill(n,-a('contingLiab'))),
+      dr('Pre-existing Relationship Settlement',fill(n,-a('preexRelation'))),
+      sh('── POST-ACQUISITION AMORTISATION ──────────────────────'),
+      dr('PPA Intangibles Amortisation ('+a('intangLife')+' yrs)',ppaAmort),
+      dr('PP&E Uplift Additional Depreciation ('+a('ppeLiveRem')+' yrs)',ppeAmort),
+      tr('Total Additional P&L Charge (post-acq)',ppaAmort.map(function(v,i){return r1(v+ppeAmort[i]);})),
+      sh('── PPA INTANGIBLES ROLL-FORWARD ────────────────────────'),
+      dr('Intangibles Balance ($M)',intangBal),
+      dr('PP&E Uplift Balance ($M)',ppeBal),
+      tr('Total PPA Assets Remaining ($M)',intangBal.map(function(v,i){return r1(v+ppeBal[i]);})),
+      sh('── GOODWILL (IFRS 3 + IAS 36) ─────────────────────────'),
+      dr('Goodwill — Opening',fill(n,goodwillAdj)),
+      dr('Goodwill Impairment (IAS 36 — annual test)',fill(n,0)),
+      tr('Goodwill — Closing',fill(n,goodwillAdj)),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'Consideration: $'+cons+'M. NCI ('+( nciM===1?'FV':'proportionate')+' method): $'+nciVal+'M. Goodwill: $'+goodwillAdj+'M. PPA: $'+a('intangPPA')+'M intangibles ('+a('intangLife')+' yr life) + $'+a('ppeUplifted')+'M PP&E uplift ('+a('ppeLiveRem')+' yrs). Annual PPA P&L charge: $'+r1(-ppaAmort[0]-ppeAmort[0])+'M.',
+      keyFindings:['Goodwill: $'+goodwillAdj+'M ('+r1(goodwillAdj/cons*100)+'% of consideration)','PPA intangibles amortisation: $'+r1(-ppaAmort[0])+'M/yr','PP&E uplift amortisation: $'+r1(-ppeAmort[0])+'M/yr','NCI value: $'+nciVal+'M ('+Math.round(a('nciPct'))+'% stake)'],
+      risks:['Goodwill impairment: tested annually — economic downturns may trigger write-down','PPA intangible lives: shorter life = higher amortisation charge post-acquisition','Contingent consideration: remeasured each period (IFRS 3.58) — changes to P&L'],
+      recommendations:['Commission independent PPA valuation (RICS/Big 4) at acquisition date','Set up CGU-level goodwill allocation and annual impairment testing model','Disclose sensitivity of goodwill impairment test (IAS 36.134)']
+    },
+    ifrsNotes:[
+      {title:'IFRS 3.18 — Acquisition Method',content:'All business combinations accounted by acquisition method: (1) identify acquirer; (2) determine acquisition date; (3) recognise/measure identifiable assets acquired, liabilities assumed, and NCI; (4) recognise goodwill or bargain purchase gain. Acquirer = entity that obtains control per IFRS 10.'},
+      {title:'NCI Measurement Choice (IFRS 3.19)',content:'Policy choice at each acquisition: (a) Fair Value method — NCI measured at FV; goodwill includes NCI\'s share. (b) Proportionate method — NCI = NCI% × FV of net identifiable assets; goodwill reflects only acquirer\'s share. FV method gives higher goodwill and higher NCI on balance sheet.'},
+      {title:'Goodwill vs Bargain Purchase (IFRS 3.34–36)',content:'If consideration + NCI < FV net assets: first reassess identification/measurement of all assets and liabilities. If still negative after reassessment: recognise immediately in P&L as bargain purchase gain. Not deferred or amortised. Goodwill: not amortised, tested annually (or more frequently if indicators) under IAS 36.'},
+    ]
+  };
+}
+
+/* ── IFRS 10 — Consolidation Worksheet ───────────────────────────────*/
+function buildIFRS10(p){
+  var sy=parseSY(p);
+  freshASM({
+    parentRev:    {label:'Parent Revenue ($M)',            value:500, unit:'$M'},
+    subRev:       {label:'Subsidiary Revenue ($M)',        value:200, unit:'$M'},
+    intercoSales: {label:'Intercompany Sales ($M)',        value:40,  unit:'$M'},
+    intercoProfit:{label:'Profit in Interco Inventory ($M)',value:8, unit:'$M'},
+    parentAssets: {label:'Parent Total Assets ($M)',       value:800, unit:'$M'},
+    subAssets:    {label:'Subsidiary Total Assets ($M)',   value:320, unit:'$M'},
+    intercoLoan:  {label:'Intercompany Loan ($M)',         value:50,  unit:'$M'},
+    goodwillBS:   {label:'Goodwill on Consolidation ($M)', value:45,  unit:'$M'},
+    nciBalPct:    {label:'NCI % in Subsidiary',            value:25,  unit:'%'},
+    parentNI:     {label:'Parent Net Income ($M)',         value:65,  unit:'$M'},
+    subNI:        {label:'Subsidiary Net Income ($M)',     value:28,  unit:'$M'},
+    startYear:    {label:'Reporting Year',                 value:sy,  unit:''},
+  });
+  return computeIFRS10(sy);
+}
+function computeIFRS10(sy){
+  var pR=a('parentRev'), sR=a('subRev'), ic=a('intercoSales'), icp=a('intercoProfit');
+  var pA=a('parentAssets'), sA=a('subAssets'), loan=a('intercoLoan');
+  var gw=a('goodwillBS'), nciPct=a('nciBalPct')/100;
+  var pNI=a('parentNI'), sNI=a('subNI');
+  var consRev=r1(pR+sR-ic);
+  var consAssets=r1(pA+sA-loan+gw-icp);
+  var nciShare=r1(sNI*nciPct);
+  var consNI=r1(pNI+sNI-icp-nciShare);
+  return {
+    modelType:'IFRS 10 — Group Consolidation Worksheet',
+    ifrsStandard:'IFRS10',
+    description:'Full consolidation | Parent + Sub | Interco elimination: $'+ic+'M sales, $'+icp+'M profit, $'+loan+'M loan',
+    currency:'USD ($M)',layout:'snapshot',
+    tableHeaders:['LINE ITEM','PARENT ($M)','SUBSIDIARY ($M)','ELIMINATIONS ($M)','CONSOLIDATED ($M)'],
+    tableRows:[
+      sh('── INCOME STATEMENT CONSOLIDATION ─────────────────────'),
+      dr('Revenue',[pR, sR, -ic, consRev]),
+      dr('Cost of Sales (incl. interco)',[null, null, null, null]),
+      dr('Unrealised Profit Eliminated',[null, null, -icp, -icp]),
+      dr('Net Income — Group (before NCI)',[pNI, sNI, -icp, r1(pNI+sNI-icp)]),
+      dr('Less: NCI Share ('+a('nciBalPct')+'%)',[null, null, null, -nciShare]),
+      tr('Net Income Attributable to Parent',[null, null, null, consNI]),
+      sh('── BALANCE SHEET CONSOLIDATION ─────────────────────────'),
+      dr('Total Assets (pre-elimination)',[pA, sA, null, r1(pA+sA)]),
+      dr('Goodwill on Consolidation',[null, null, gw, gw]),
+      dr('Eliminate: Investment in Sub',[null, null, -sA*(1-nciPct), null]),
+      dr('Eliminate: Intercompany Loan',[null, null, -loan, -loan]),
+      dr('Eliminate: Unrealised Profit in Inventory',[null, null, -icp, -icp]),
+      tr('Consolidated Total Assets',[null, null, null, consAssets]),
+      sh('── NCI & EQUITY ────────────────────────────────────────'),
+      dr('NCI on Balance Sheet ('+a('nciBalPct')+'% of Sub Net Assets)',[null, null, null, r1(sA*nciPct)]),
+      tr('NCI Share of Current Year Profit',[null, null, null, nciShare]),
+      sh('── INTERCOMPANY ELIMINATION SCHEDULE ───────────────────'),
+      dr('Sales eliminated',[ic, null, -ic, 0]),
+      dr('Loan eliminated (Dr Sub, Cr Parent)',[loan, null, -loan, 0]),
+      dr('Unrealised profit in closing inventory',[null, icp, -icp, 0]),
+    ],
+    assumptions:ASM,
+    analysis:{
+      summary:'Consolidated revenue: $'+consRev+'M (excl. $'+ic+'M interco). Consolidated net income: $'+consNI+'M (after $'+icp+'M unrealised profit, $'+nciShare+'M NCI). Consolidated assets: $'+consAssets+'M (incl. goodwill $'+gw+'M).',
+      keyFindings:['Revenue eliminated: $'+ic+'M','Unrealised profit: $'+icp+'M → reduces assets and profits','NCI ('+a('nciBalPct')+'%): $'+nciShare+'M profit | $'+r1(sA*nciPct)+'M on BS','Goodwill: $'+gw+'M added on consolidation'],
+      risks:['Intercompany transactions must ALL be eliminated — dividends, management fees, royalties','Intercompany balances must reconcile exactly before period-end close','Goodwill tested annually for impairment (IAS 36) — allocate to CGUs'],
+      recommendations:['Maintain intercompany matrix for all eliminations','Ensure same accounting policies applied across group (IFRS 10.19)','Foreign sub: translate at closing rate for BS, average rate for P&L (IAS 21)']
+    },
+    ifrsNotes:[
+      {title:'IFRS 10 — Control (IFRS 10.6)',content:'Investor controls investee when: (a) power over investee (existing rights that give ability to direct relevant activities); (b) exposure to variable returns; (c) ability to use power to affect returns. All three elements required. Potential voting rights considered if substantive.'},
+      {title:'IFRS 10.19 — Uniform Accounting Policies',content:'Group entities must apply parent\'s accounting policies. If subsidiary uses different policies, adjustments required on consolidation. Reporting dates: if sub\'s year-end >3 months from group, additional interim statements required.'},
+      {title:'IAS 21 — Foreign Currency Translation',content:'Foreign subsidiary: assets/liabilities at closing rate; income/expenses at transaction date rate (or average). Exchange differences to OCI (translation reserve). On disposal: cumulative OCI released to P&L.'},
+    ]
+  };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   END NEW MODEL BLOCK
+═══════════════════════════════════════════════════════════════════════ */
+
 function getModel(p){
   var t=detect(p);
   _currentModelType = t;
-  /* On recalc (ASM already populated), reset only structural params from ASM */
-  if(t==='IFRS9')  return buildIFRS9(p);
-  if(t==='IFRS16') return buildIFRS16(p);
-  if(t==='IFRS18') return buildIFRS18_r(p);
-  if(t==='IFRS17') return buildIFRS17(p);
-  if(t==='IFRS15') return buildIFRS15(p);
-  if(t==='IFRS7')  return buildIFRS7(p);
-  if(t==='IAS16')  return buildIAS16_r(p);
-  if(t==='IAS19')  return buildIAS19(p);
-  if(t==='IAS36')  return buildIAS36(p);
-  if(t==='IAS37')  return buildIAS37(p);
-  if(t==='IAS38')  return buildIAS38(p);
-  if(t==='IAS12')  return buildIAS12(p);
-  if(t==='IAS2')   return buildIAS2(p);
-  if(t==='LBO')    return buildLBO(p);
+  if(t==='IFRS9')       return buildIFRS9(p);
+  if(t==='IFRS9HEDGE')  return buildIFRS9HEDGE(p);
+  if(t==='IFRS9CM')     return buildIFRS9CM(p);
+  if(t==='IFRS16')      return buildIFRS16(p);
+  if(t==='IFRS16MOD')   return buildIFRS16MOD(p);
+  if(t==='IFRS18')      return buildIFRS18_r(p);
+  if(t==='IFRS17')      return buildIFRS17(p);
+  if(t==='IFRS15')      return buildIFRS15(p);
+  if(t==='IFRS7')       return buildIFRS7(p);
+  if(t==='IAS16')       return buildIAS16_r(p);
+  if(t==='IAS19')       return buildIAS19(p);
+  if(t==='IAS36')       return buildIAS36(p);
+  if(t==='IAS37')       return buildIAS37(p);
+  if(t==='IAS38')       return buildIAS38(p);
+  if(t==='IAS12')       return buildIAS12(p);
+  if(t==='IAS12BS')     return buildIAS12BS(p);
+  if(t==='IAS2')        return buildIAS2(p);
+  if(t==='IFRS3')       return buildIFRS3(p);
+  if(t==='IFRS10')      return buildIFRS10(p);
+  if(t==='LBO')         return buildLBO(p);
+  if(t==='DDM')         return buildDDM(p);
+  if(t==='COMPS')       return buildCOMPS(p);
+  if(t==='NAV')         return buildNAV(p);
   return buildDCF(p);
 }
 
@@ -3898,82 +4669,118 @@ function processImportFile(file){
 }
 
 function parseWorkbook(wb, fname){
-  /* Step 1: detect model type from workbook */
-  var allText='';
-  wb.SheetNames.forEach(function(sn){
-    var ws=wb.Sheets[sn];
-    var arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-    arr.slice(0,10).forEach(function(row){allText+=row.join(' ').toLowerCase()+' ';});
-  });
-  allText+=' '+fname.toLowerCase();
+  /* ── Step 1: find first data sheet (skip README/cover sheets) ── */
+  var dataSheetName = wb.SheetNames[0];
+  for(var si=0; si<wb.SheetNames.length; si++){
+    var sn=wb.SheetNames[si].toLowerCase();
+    if(sn.indexOf('readme')<0 && sn.indexOf('cover')<0 && sn.indexOf('index')<0 && sn.indexOf('contents')<0){
+      dataSheetName = wb.SheetNames[si]; break;
+    }
+  }
+
+  /* ── Step 2: detect model type from data sheet + filename only ── */
+  var allText = dataSheetName.toLowerCase() + ' ' + fname.toLowerCase() + ' ';
+  var detSheet = wb.Sheets[dataSheetName];
+  var detRows = XLSX.utils.sheet_to_json(detSheet,{header:1,defval:''});
+  detRows.slice(0,20).forEach(function(row){allText += row.join(' ').toLowerCase() + ' ';});
   var type=detect(allText)||'DCF';
 
-  /* Step 2: extract numeric values and populate assumptions */
-  var allNums=[], allHeaders=[], yearPattern=/fy\s*\d{4}|\d{4}\/\d{2,4}|year\s*[123456789]/i;
-  var mainSheet=wb.Sheets[wb.SheetNames[0]];
+  /* ── Step 3: read data from the detected data sheet ── */
+  var mainSheet=wb.Sheets[dataSheetName];
   var rows=XLSX.utils.sheet_to_json(mainSheet,{header:1,defval:''});
 
-  /* Find year headers */
-  var yearRow=-1, numYears=0, startYear=new Date().getFullYear();
-  rows.forEach(function(row,ri){
+  /* ── Step 4: find year headers → numYears, startYear ── */
+  var yearPattern=/fy\s*\d{4}|\d{4}\/\d{2,4}|year\s*[123456789]/i;
+  var numYears=5, startYear=new Date().getFullYear();
+  rows.forEach(function(row){
     var yCount=0;
-    row.forEach(function(cell){
-      if(yearPattern.test(String(cell))) yCount++;
-    });
-    if(yCount>=2&&yearRow===-1){
-      yearRow=ri;
+    row.forEach(function(cell){if(yearPattern.test(String(cell)))yCount++;});
+    if(yCount>=2){
+      var found=0;
       row.forEach(function(cell){
-        var s=String(cell);
-        var ym=s.match(/20(\d\d)/);
-        if(ym){numYears++;if(numYears===1)startYear=2000+parseInt(ym[1]);}
+        var m=String(cell).match(/20(\d\d)/);
+        if(m){found++;if(found===1)startYear=2000+parseInt(m[1]);}
       });
+      if(found>=2) numYears=found;
     }
   });
-  if(numYears<1) numYears=5;
 
-  /* Extract all numeric cells for assumption mapping */
+  /* ── Step 5: extract all label→firstNumericValue from sheet ── */
   var numericMap={};
   rows.forEach(function(row){
     var label=String(row[0]||'').toLowerCase().trim();
-    if(!label) return;
-    var firstNum=null;
+    if(!label||label.length<3) return;
+    /* look across all columns for the first non-zero number */
     for(var ci=1;ci<row.length;ci++){
-      var v=parseFloat(String(row[ci]||'').replace(/,/g,''));
-      if(!isNaN(v)&&v!==0){firstNum=v;break;}
+      var raw=String(row[ci]||'').replace(/[$,%\s]/g,'').replace(/,/g,'');
+      var v=parseFloat(raw);
+      if(!isNaN(v)&&v!==0){numericMap[label]=v;break;}
     }
-    if(firstNum!==null) numericMap[label]=firstNum;
   });
 
-  /* Map detected values → assumption keys */
-  var asmUpdates={};
+  /* ── Step 6: comprehensive label → ASM key mapping ── */
   var labelMaps=[
-    {keys:['revenue','turnover','net revenue','total revenue'],   asm:'rev1',     scale:1},
-    {keys:['ebitda margin','ebitda %'],                           asm:'ebitdaMgn',scale:100},
-    {keys:['wacc','discount rate','cost of capital'],             asm:'wacc',     scale:1},
-    {keys:['terminal growth','tgr','perpetuity growth'],          asm:'tgr',      scale:1},
-    {keys:['tax rate','effective tax','income tax rate'],         asm:'taxRate',  scale:1},
-    {keys:['gross carrying','ead','exposure at default'],         asm:'s1EAD',    scale:1},
-    {keys:['monthly payment','monthly rent','annual payment'],    asm:'annualPmt',scale:1},
-    {keys:['asset cost','cost of asset','purchase price'],        asm:'assetCost',scale:1},
-    {keys:['discount rate','ibr','incremental borrow'],           asm:'ibr',      scale:1},
-    {keys:['opening dbo','defined benefit oblig'],                asm:'openDBO',  scale:1},
-    {keys:['carrying amount','cgu carrying'],                     asm:'carrying', scale:1},
-    {keys:['premiums','gross written premium'],                   asm:'premiums', scale:1},
+    /* IAS 16 PP&E */
+    {keys:['asset cost','cost of asset','purchase price','gross cost'],           asm:'assetCost',  scale:1},
+    {keys:['residual value','salvage value','scrap value'],                       asm:'residual',   scale:1},
+    {keys:['useful life','economic life'],                                        asm:'usefulLife', scale:1},
+    {keys:['annual capital addition','capital addition','additions'],             asm:'additionsY1',scale:1},
+    {keys:['borrowing cost','capitalised interest'],                              asm:'borrowCost', scale:1},
+    {keys:['impairment loss','impairment'],                                       asm:'impairY3',   scale:1},
+    {keys:['depreciation method','method:'],                                      asm:'deprMethod', scale:1},
+    {keys:['reducing balance rate'],                                              asm:'rbRate',     scale:1},
+    {keys:['total estimated machine hour','total machine hour'],                  asm:'totalHours', scale:1},
+    /* DCF / LBO */
+    {keys:['revenue year 1','revenue ($m)','total revenue','net revenue','turnover'], asm:'rev1',      scale:1},
+    {keys:['ebitda margin','ebitda %'],                                           asm:'ebitdaMgn',  scale:1},
+    {keys:['revenue growth','revenue growth rate'],                               asm:'revGrowth',  scale:1},
+    {keys:['wacc','weighted average cost'],                                       asm:'wacc',       scale:1},
+    {keys:['terminal growth','tgr','perpetuity growth'],                          asm:'tgr',        scale:1},
+    {keys:['tax rate','effective tax','corporate tax'],                           asm:'taxRate',    scale:1},
+    {keys:['capex as %','capex %','capital expenditure %'],                       asm:'capexPct',   scale:1},
+    {keys:['d&a as %','depreciation as %','da %'],                                asm:'daPct',      scale:1},
+    {keys:['entry ebitda multiple','entry multiple'],                             asm:'entryMult',  scale:1},
+    {keys:['exit ebitda multiple','exit multiple'],                               asm:'exitMult',   scale:1},
+    /* IFRS 9 ECL */
+    {keys:['gross carrying amount','ead','exposure at default'],                  asm:'s1EAD',      scale:1},
+    {keys:['pd','probability of default'],                                        asm:'s1PD12m',    scale:1},
+    {keys:['lgd','loss given default'],                                           asm:'s1LGD',      scale:1},
+    {keys:['eir','effective interest rate'],                                      asm:'s1EIR',      scale:1},
+    /* IFRS 16 Lease */
+    {keys:['annual lease payment','annual payment','monthly payment'],            asm:'annualPmt',  scale:1},
+    {keys:['lease term'],                                                         asm:'leaseTerm',  scale:1},
+    {keys:['incremental borrowing rate','ibr'],                                   asm:'ibr',        scale:1},
+    {keys:['initial direct cost'],                                                asm:'idc',        scale:1},
+    {keys:['rent review rate','annual rent review'],                              asm:'rentReview', scale:1},
+    /* IAS 19 Pension */
+    {keys:['opening dbo','defined benefit obligation'],                           asm:'openDBO',    scale:1},
+    {keys:['opening fair value plan asset','opening plan asset'],                 asm:'openAssets', scale:1},
+    {keys:['discount rate (aa','discount rate'],                                  asm:'discRate',   scale:1},
+    {keys:['salary growth rate','salary escalation'],                             asm:'salGrowth',  scale:1},
+    {keys:['expected asset return','asset return'],                               asm:'assetRet',   scale:1},
+    {keys:['current service cost'],                                               asm:'currSvc',    scale:1},
+    {keys:['employer contribution'],                                              asm:'empContrib', scale:1},
+    {keys:['benefits paid'],                                                      asm:'benefits',   scale:1},
+    /* IAS 36 Impairment */
+    {keys:['carrying amount','cgu carrying'],                                     asm:'carrying',   scale:1},
+    /* IAS 37 Provisions */
+    {keys:['warranty provision','warranty cost'],                                 asm:'warrantyCost',scale:1},
+    /* IFRS 17 Insurance */
+    {keys:['premiums','gross written premium'],                                   asm:'premiums',   scale:1},
   ];
 
+  var asmUpdates={};
   Object.keys(numericMap).forEach(function(label){
     labelMaps.forEach(function(map){
-      if(map.keys.some(function(k){return label.indexOf(k)>=0;})){
-        if(!asmUpdates[map.asm]){
-          var v=numericMap[label];
-          if(map.scale===100) v=v>1?v:v*100; // convert 0.20 → 20%
-          asmUpdates[map.asm]=v;
+      if(!asmUpdates[map.asm]){
+        if(map.keys.some(function(k){return label.indexOf(k)>=0;})){
+          asmUpdates[map.asm]=numericMap[label];
         }
       }
     });
   });
 
-  /* Update prompt + rebuild */
+  /* ── Step 7: build the model prompt ── */
   var prompts={
     'IFRS9':'IFRS 9 ECL model','IFRS16':'IFRS 16 lease',
     'IFRS18':'IFRS 18 income statement','IAS16':'IAS 16 PP&E depreciation',
@@ -3986,19 +4793,33 @@ function parseWorkbook(wb, fname){
   var basePrompt=(prompts[type]||'DCF valuation')+' '+numYears+' years from '+startYear;
   document.getElementById('pta').value=basePrompt;
 
-  /* Build model first */
+  /* ── Step 8: reset state and build model cleanly ── */
+  PR=basePrompt; ASM={}; _USER_ASM={}; _cellOverrides={};
+
+  /* Pre-populate ASM with imported values BEFORE getModel calls freshASM.
+     freshASM() preserves existing values, so inject first. */
+  Object.keys(asmUpdates).forEach(function(k){
+    ASM[k]={label:k, value:asmUpdates[k], unit:''};
+  });
+
+  /* Build — freshASM inside will see our pre-injected values and preserve them */
   var model=getModel(basePrompt);
   M=model; PR=basePrompt;
 
-  /* Now override ASM with detected values */
+  /* Belt-and-suspenders: reapply overrides in case freshASM used a default */
   Object.keys(asmUpdates).forEach(function(k){
     if(ASM[k]!==undefined) ASM[k].value=asmUpdates[k];
   });
 
-  renderModel(model);
-  renderAssumptions(); /* re-render with updated values */
+  /* Recompute the model with correct ASM values, then render */
+  var finalModel=getModel(basePrompt);
+  M=finalModel;
 
-  showImportStatus('✓ Imported '+fname+' → '+model.ifrsStandard+' | '+numYears+' years from '+startYear+' | '+Object.keys(asmUpdates).length+' assumptions auto-mapped');
+  renderModel(finalModel);
+  renderAssumptions();
+
+  var mapped=Object.keys(asmUpdates).length;
+  showImportStatus('✓ Imported: '+dataSheetName+' → '+finalModel.ifrsStandard+' | '+numYears+' yrs from '+startYear+' | '+mapped+' assumptions mapped: '+Object.keys(asmUpdates).join(', '));
   showTab('T', document.querySelectorAll('.tb')[0]);
   closeImportModal();
 }
