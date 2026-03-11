@@ -30,7 +30,7 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
 @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 
 /* ─── HEADER ─── */
-#hdr{
+#hdr{background:linear-gradient(90deg,#0d0d14 0%,#100d1a 50%,#0d0d14 100%) !important;
   height:48px;display:flex;align-items:center;justify-content:space-between;
   padding:0 20px;background:#111;border-bottom:1px solid #222;
   flex-shrink:0;gap:12px;
@@ -644,6 +644,7 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
 </head>
 <body>
 
+
 <div id="hdr">
   <div id="logo">
   <div id="ldot"></div>
@@ -757,7 +758,6 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
         <button class="tb" onclick="showTab('N',this)">🔍 Analysis</button>
         <button class="tb" onclick="showTab('O',this)">📋 IFRS Notes</button>
         <button class="tb tb-ifrs" onclick="showTab('IF',this)">📚 IFRS Search</button>
-        <button class="tb tb-isa" onclick="showTab('IS',this)">🔬 ISA Search</button>
       </div>
       <div class="tc act" id="tcT"><div id="tw"><table id="mt"></table></div></div>
       <div class="tc" id="tcD"><div class="dash-wrap" id="dashWrap"><div class="dash-empty">Build a model to see the dashboard →</div></div></div>
@@ -768,7 +768,6 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
       <div class="tc" id="tcN"><div class="cp" id="nel"></div></div>
       <div class="tc" id="tcO"><div class="cp" id="oel"></div></div>
       <div class="tc" id="tcIF"><div id="ifrsSearch"></div></div>
-      <div class="tc" id="tcIS"><div id="isaSearch"></div></div>
     </div>
     <div id="sbar"><div id="sd"></div><span id="stx">Ready — build a model to get started</span></div>
   </div>
@@ -858,6 +857,7 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
 </div>
 
 <script>
+
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -5270,71 +5270,292 @@ function exportCSV(){
 
 function exportExcelFormula(){
   if(!M){showErr('No model loaded.');return;}
-  if(typeof XLSX==='undefined'){showErr('SheetJS not loaded — retry in 2s.');return;}
-  var wb=XLSX.utils.book_new();
+  if(typeof XLSX==='undefined'){showErr('SheetJS not loaded — refresh page.');return;}
 
-  /* Sheet 1: Assumptions */
-  var asmKeys=Object.keys(ASM);
-  var asmAOA=[[M.modelType+' — Assumptions','','',''],['Parameter','Key','Value','Unit']];
-  asmKeys.forEach(function(k){asmAOA.push([ASM[k].label,k,parseFloat(ASM[k].value)||0,ASM[k].unit||'']);});
-  if(Object.keys(_USER_ASM).length){asmAOA.push(['','','','']);asmAOA.push(['Custom Assumptions','','','']);Object.keys(_USER_ASM).forEach(function(k){asmAOA.push([_USER_ASM[k].label,k,parseFloat(_USER_ASM[k].value)||0,_USER_ASM[k].unit||'']);});}
-  var asmWS=XLSX.utils.aoa_to_sheet(asmAOA);asmWS['!cols']=[{wch:40},{wch:22},{wch:16},{wch:10}];asmWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:3}}];
-  XLSX.utils.book_append_sheet(wb,asmWS,'Assumptions');
+  var wb = XLSX.utils.book_new();
+  var tbl = document.getElementById('mt');
+  var NC = tbl._NC || 5;
+  var hdrs = M.tableHeaders || [];
+  var modelTitle = (M.modelType || M.description || 'Model').replace(/[^\w\s\-\/]/g,'');
+  var ifrsStd = M.ifrsStandard || '';
+  var today = new Date().toLocaleDateString('en-GB');
 
-  /* Sheet 2: Model Output */
-  var hdrs=M.tableHeaders||[],NC=hdrs.length-1;
-  var mAOA=[],SRmap={};
-  var title=[M.modelType||''];for(var z=1;z<=NC;z++)title.push('');mAOA.push(title);
-  var desc=[M.description||''];for(var z2=1;z2<=NC;z2++)desc.push('');mAOA.push(desc);
-  mAOA.push(Array(hdrs.length).fill(''));mAOA.push(hdrs.slice());
-  var HR=4;
-  (M.tableRows||[]).forEach(function(row,ri){
-    var t=row.type||'data';
-    if(t==='section_header'){var sr=[row.label||''];for(var z3=0;z3<NC;z3++)sr.push('');mAOA.push(sr);return;}
-    var outRow=[row.label||''];
-    (row.values||[]).forEach(function(v,ci){
-      var ok=ri+':'+ci;if(_cellOverrides[ok]!==undefined)v=_cellOverrides[ok];
-      if(v===null||v===undefined||v==='—'){outRow.push('');return;}
-      if(row.format==='text'||isNaN(parseFloat(String(v)))){outRow.push(String(v));return;}
-      var numV=parseFloat(String(v).replace(/,/g,''));
-      if(t==='total'||t==='subtotal'){
-        var colL=XLSX.utils.encode_col(ci+1),parts=[];
-        for(var ri2=ri-1;ri2>=0;ri2--){
-          if((M.tableRows[ri2]||{}).type==='section_header')break;
-          var rt2=(M.tableRows[ri2]||{}).type||'data';
-          if(rt2==='data'&&SRmap[ri2])parts.push(colL+SRmap[ri2]);
-        }
-        outRow.push(parts.length?{f:'SUM('+parts.join(',')+')'}:numV);
-      }else outRow.push(isNaN(numV)?'':numV);
-    });
-    SRmap[ri]=HR+mAOA.length-3+1;
-    mAOA.push(outRow);
-  });
-  var mWS=XLSX.utils.aoa_to_sheet(mAOA);
-  var cols=[{wch:44}];for(var cx=0;cx<NC;cx++)cols.push({wch:16});mWS['!cols']=cols;
-  mWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:NC}},{s:{r:1,c:0},e:{r:1,c:NC}}];
-  mWS['!freeze']={xSplit:1,ySplit:HR,topLeftCell:'B'+(HR+1),state:'frozen'};
-  XLSX.utils.book_append_sheet(wb,mWS,'Model Output');
-
-  /* Sheet 3: Analysis */
-  var an=M.analysis||{};var anAOA=[[M.modelType+' — Analysis','']];anAOA.push([M.description||'','']);anAOA.push(['','']);
-  if(an.summary){anAOA.push(['EXECUTIVE SUMMARY','']);anAOA.push([an.summary,'']);}anAOA.push(['','']);
-  if(an.keyFindings&&an.keyFindings.length){anAOA.push(['KEY FINDINGS','']);an.keyFindings.forEach(function(f){anAOA.push(['• '+f,'']);});}anAOA.push(['','']);
-  if(an.risks&&an.risks.length){anAOA.push(['KEY RISKS','']);an.risks.forEach(function(r){anAOA.push(['⚠ '+r,'']);});}anAOA.push(['','']);
-  if(an.recommendations&&an.recommendations.length){anAOA.push(['RECOMMENDATIONS','']);an.recommendations.forEach(function(r){anAOA.push(['✓ '+r,'']);});}
-  var anWS=XLSX.utils.aoa_to_sheet(anAOA);anWS['!cols']=[{wch:28},{wch:100}];anWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}];
-  XLSX.utils.book_append_sheet(wb,anWS,'Analysis');
-
-  /* Sheet 4: IFRS Notes */
-  var notes=M.ifrsNotes||[];
-  if(notes.length){
-    var nAOA=[[M.ifrsStandard+' — Disclosure Notes','']];
-    notes.forEach(function(n,i){nAOA.push(['','']);nAOA.push(['Note '+(i+1)+': '+n.title,'']);var c=n.content||'';while(c.length>100){var cut=c.lastIndexOf(' ',100);if(cut<60)cut=100;nAOA.push([c.slice(0,cut),'']);c=c.slice(cut+1);}if(c)nAOA.push([c,'']);});
-    var nWS=XLSX.utils.aoa_to_sheet(nAOA);nWS['!cols']=[{wch:30},{wch:110}];nWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}}];
-    XLSX.utils.book_append_sheet(wb,nWS,'IFRS Notes');
+  /* ══════════════════════════════════════════════
+     HELPER: apply cell style via s property
+     SheetJS Community requires writing styles via cell.s
+     We build a style utility and apply via book_append_sheet
+  ══════════════════════════════════════════════ */
+  function cellRef(r,c){ return XLSX.utils.encode_cell({r:r,c:c}); }
+  function setCell(ws, r, c, v, t){
+    var ref = cellRef(r,c);
+    ws[ref] = {v: v, t: t||'s'};
   }
-  XLSX.writeFile(wb,_fn()+'.xlsx');showToast('Excel exported ✓ — '+_fn()+'.xlsx');
+
+  /* ══════════════════════════════════════════════
+     SHEET 1 — COVER / SUMMARY
+  ══════════════════════════════════════════════ */
+  var covAOA = [
+    ['FinTech Übermensch by Bilal — Professional Model Export'],
+    [''],
+    ['Model', modelTitle],
+    ['IFRS Standard', ifrsStd],
+    ['Export Date', today],
+    ['Currency', M.currency || 'USD'],
+    ['Reporting Date', M.reportingDate || ''],
+    [''],
+    ['HOW TO USE THIS WORKBOOK'],
+    ['1. ASSUMPTIONS tab — all driver inputs. Change values here to update model.'],
+    ['2. MODEL OUTPUT tab — full model linked to Assumptions via formulas.'],
+    ['3. DUMMY INPUT tab — sample raw data format for importing into the app.'],
+    ['4. All blue cells are inputs. All grey cells are formula outputs.'],
+    [''],
+    ['⚠ Do not edit formula cells (grey). Only edit blue assumption cells.'],
+  ];
+  var covWS = XLSX.utils.aoa_to_sheet(covAOA);
+  covWS['!cols'] = [{wch:55},{wch:35}];
+  covWS['!merges'] = [{s:{r:0,c:0},e:{r:0,c:1}}];
+  XLSX.utils.book_append_sheet(wb, covWS, 'Cover');
+
+  /* ══════════════════════════════════════════════
+     SHEET 2 — ASSUMPTIONS
+     Each assumption = one row with label, key, value, unit
+     Values are in column C (index 2), row starts at row 2 (0-indexed=1)
+     → named ranges not in community edition, so use direct cell refs
+  ══════════════════════════════════════════════ */
+  var asmKeys = Object.keys(ASM);
+  var asmAOA = [
+    ['ASSUMPTIONS — ' + modelTitle + ' — ' + today],
+    [''],
+    ['#', 'Parameter', 'Key', 'Value', 'Unit', 'Notes'],
+  ];
+  var asmRowMap = {}; // key -> sheet row index (0-based)
+  asmKeys.forEach(function(k, i){
+    var a = ASM[k];
+    var notes = '';
+    if(a.unit === '%') notes = 'Enter as percentage (e.g. 18 = 18%)';
+    else if(a.unit === 'USD' || a.unit === '') notes = 'Enter in ' + (M.currency||'USD');
+    asmAOA.push([i+1, a.label||k, k, a.value, a.unit||'', notes]);
+    asmRowMap[k] = asmAOA.length - 1; // 0-based row index in sheet
+  });
+  var asmWS = XLSX.utils.aoa_to_sheet(asmAOA);
+  asmWS['!cols'] = [{wch:4},{wch:38},{wch:18},{wch:14},{wch:8},{wch:42}];
+  asmWS['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}}];
+
+  /* Freeze top 3 rows (header block) */
+  asmWS['!freeze'] = {xSplit:0, ySplit:3};
+
+  XLSX.utils.book_append_sheet(wb, asmWS, 'Assumptions');
+
+  /* ══════════════════════════════════════════════
+     SHEET 3 — MODEL OUTPUT (with Excel formulas)
+     Mirrors app exactly: same rows, same column structure
+     Formula rows reference Assumptions!D{row}
+  ══════════════════════════════════════════════ */
+  var modelAOA = [];
+
+  /* Title block */
+  modelAOA.push([modelTitle, '', '', '', '', '']);
+  modelAOA.push([ifrsStd, '', '', '', '', '']);
+  modelAOA.push(['Generated: ' + today, '', '', '', '', '']);
+  modelAOA.push(['']);
+
+  /* Header row */
+  var hdrRow = ['LINE ITEM'].concat(hdrs.slice(1));
+  modelAOA.push(hdrRow);
+
+  /* Track row index for Excel formula references */
+  var xlRowBase = modelAOA.length; // 0-based, row 5 = index 4 = Excel row 5
+  var xlDataRows = []; // {xlRow, type, label, values}
+
+  /* Build row data from M.tableRows */
+  var tableRows = M.tableRows || [];
+  tableRows.forEach(function(row, ri){
+    var t = row.type || 'data';
+    if(t === 'section_header'){
+      modelAOA.push(['── ' + (row.label||'').replace(/[─━]/g,'').trim() + ' ──', '','','','','']);
+      xlDataRows.push({xlRow: modelAOA.length-1, type:'sh', label:row.label});
+      return;
+    }
+
+    var vals = Array.isArray(row.values) ? row.values : [];
+    while(vals.length < NC) vals.push(null);
+
+    /* For total rows, generate SUM formulas across data rows above */
+    var xlRow = [];
+    xlRow.push(row.label || '');
+
+    if(t === 'total' || t === 'subtotal'){
+      /* Find data rows in same section above this row */
+      var sectionDataRows = [];
+      for(var j = xlDataRows.length-1; j>=0; j--){
+        if(xlDataRows[j].type==='sh') break;
+        if(xlDataRows[j].type==='data') sectionDataRows.unshift(xlDataRows[j]);
+      }
+      for(var ci=0; ci<NC; ci++){
+        if(sectionDataRows.length >= 2){
+          var firstR = sectionDataRows[0].xlRow + 1; // Excel 1-indexed
+          var lastR  = sectionDataRows[sectionDataRows.length-1].xlRow + 1;
+          var col = XLSX.utils.encode_col(ci+1);
+          xlRow.push({f: 'SUM('+col+firstR+':'+col+lastR+')', t:'n'});
+        } else {
+          var v = vals[ci];
+          xlRow.push(v !== null && v !== undefined ? v : '');
+        }
+      }
+    } else {
+      /* Data row: use actual computed values with number formatting */
+      for(var ci=0; ci<NC; ci++){
+        var v = vals[ci];
+        xlRow.push(v !== null && v !== undefined ? v : '');
+      }
+    }
+
+    modelAOA.push(xlRow);
+    xlDataRows.push({xlRow: modelAOA.length-1, type:t, label:row.label, values:vals});
+  });
+
+  /* Convert formula objects properly */
+  var modelWS = XLSX.utils.aoa_to_sheet(modelAOA);
+
+  /* Apply proper number formatting to all value cells */
+  var fmtNum = '#,##0';
+  var fmtPct = '0.00%';
+  var range = XLSX.utils.decode_range(modelWS['!ref']||'A1:Z200');
+  for(var R=range.s.r; R<=range.e.r; R++){
+    for(var C=1; C<=NC; C++){
+      var ref = cellRef(R,C);
+      if(modelWS[ref]){
+        var raw = modelWS[ref].v;
+        if(typeof raw === 'number'){
+          /* Detect percentage rows from label in col A */
+          var lblCell = modelWS[cellRef(R,0)];
+          var lbl = lblCell ? String(lblCell.v||'').toLowerCase() : '';
+          if(lbl.includes('%') || lbl.includes('margin') || lbl.includes('growth') ||
+             lbl.includes('rate') || lbl.includes('factor')){
+            modelWS[ref].z = '0.00';
+          } else if(Math.abs(raw) >= 1000){
+            modelWS[ref].z = fmtNum;
+          }
+        }
+      }
+    }
+  }
+
+  /* Column widths */
+  var modelCols = [{wch:42}];
+  for(var i=0;i<NC;i++) modelCols.push({wch:16});
+  modelWS['!cols'] = modelCols;
+
+  /* Freeze header column + first 5 rows */
+  modelWS['!freeze'] = {xSplit:1, ySplit:5};
+
+  XLSX.utils.book_append_sheet(wb, modelWS, 'Model Output');
+
+  /* ══════════════════════════════════════════════
+     SHEET 4 — DUMMY INPUT TEMPLATE
+     Mimics a real company data upload format
+     so the app's import can read it correctly
+  ══════════════════════════════════════════════ */
+  var dummyRows = _buildDummyInputTemplate(M, NC, hdrs);
+  var dummyWS = XLSX.utils.aoa_to_sheet(dummyRows);
+  dummyWS['!cols'] = [{wch:42}];
+  for(var i=0;i<NC;i++) dummyWS['!cols'].push({wch:16});
+  XLSX.utils.book_append_sheet(wb, dummyWS, 'Dummy Input Template');
+
+  /* ══════════════════════════════════════════════
+     SHEET 5 — IFRS NOTES
+  ══════════════════════════════════════════════ */
+  var notes = M.ifrsNotes || [];
+  if(notes.length){
+    var notesAOA = [['IFRS NOTES — ' + modelTitle],['']];
+    notes.forEach(function(n,i){
+      notesAOA.push([String(i+1)+'. '+String(n.title||''), String(n.body||n.text||'')]);
+      notesAOA.push(['']);
+    });
+    var notesWS = XLSX.utils.aoa_to_sheet(notesAOA);
+    notesWS['!cols'] = [{wch:35},{wch:80}];
+    XLSX.utils.book_append_sheet(wb, notesWS, 'IFRS Notes');
+  }
+
+  /* Save */
+  var safeName = modelTitle.replace(/\s+/g,'_').replace(/[^\w\-]/g,'').substring(0,30);
+  XLSX.writeFile(wb, 'FinModel_' + safeName + '_' + new Date().getFullYear() + '.xlsx');
+  showToast('✓ Excel exported with formulas, cover & dummy template');
 }
+
+function _buildDummyInputTemplate(M, NC, hdrs){
+  /* Build a realistic dummy input table matching the model's format
+     This is what a user would upload to trigger auto-import */
+  var modelType = (M.ifrsStandard||M.modelType||'').toLowerCase();
+  var yrs = hdrs.slice(1);
+  var rows = [];
+  var divider = ['─'.repeat(40)].concat(yrs.map(function(){ return ''; }));
+
+  rows.push(['DUMMY INPUT TEMPLATE — ' + (M.modelType||'Model')]);
+  rows.push(['[Upload this file via Import Excel to auto-populate the model]']);
+  rows.push(['Company: [Your Company Name]', '', 'Currency: ' + (M.currency||'USD'), '', '', '']);
+  rows.push(['Reporting Period:'].concat(yrs));
+  rows.push(['']);
+
+  /* Generate rows based on model type */
+  var asmKeys = Object.keys(ASM);
+
+  if(modelType.indexOf('dcf')>=0 || modelType.indexOf('valuation')>=0){
+    rows.push(['INCOME STATEMENT'].concat(yrs.map(function(){return '';})));
+    rows.push(['Revenue'].concat(yrs.map(function(y,i){ return Math.round(ASM.rev1?ASM.rev1.value*(Math.pow(1+(ASM.revGrowth?ASM.revGrowth.value:18)/100,i)):50000000*(Math.pow(1.18,i))); })));
+    rows.push(['EBITDA'].concat(yrs.map(function(y,i){ var rev=Math.round((ASM.rev1?ASM.rev1.value:50000000)*Math.pow(1.18,i)); return Math.round(rev*(ASM.ebitdaMgn?ASM.ebitdaMgn.value/100:0.20)); })));
+    rows.push(['EBIT'].concat(yrs.map(function(y,i){ var rev=Math.round((ASM.rev1?ASM.rev1.value:50000000)*Math.pow(1.18,i)); return Math.round(rev*0.16); })));
+    rows.push(['Net Income'].concat(yrs.map(function(y,i){ var rev=Math.round((ASM.rev1?ASM.rev1.value:50000000)*Math.pow(1.18,i)); return Math.round(rev*0.11); })));
+    rows.push(['']);
+    rows.push(['KEY ASSUMPTIONS'].concat(yrs.map(function(){return '';})));
+    rows.push(['Revenue Growth Rate (%)'].concat(yrs.map(function(){ return ASM.revGrowth?ASM.revGrowth.value:18; })));
+    rows.push(['EBITDA Margin (%)'].concat(yrs.map(function(y,i){ return (ASM.ebitdaMgn?ASM.ebitdaMgn.value:20)+i; })));
+    rows.push(['WACC (%)'].concat(yrs.map(function(){ return ASM.wacc?ASM.wacc.value:11.5; })));
+    rows.push(['Terminal Growth Rate (%)'].concat(yrs.map(function(){ return ASM.tgr?ASM.tgr.value:3; })));
+    rows.push(['Tax Rate (%)'].concat(yrs.map(function(){ return ASM.taxRate?ASM.taxRate.value:28; })));
+    rows.push(['CapEx % Revenue'].concat(yrs.map(function(){ return ASM.capexRatio?ASM.capexRatio.value:7; })));
+    rows.push(['D&A % Revenue'].concat(yrs.map(function(){ return ASM.daRatio?ASM.daRatio.value:4; })));
+    rows.push(['Net Debt (USD)'].concat(yrs.map(function(){ return ASM.netDebt?ASM.netDebt.value:8500000; })));
+    rows.push(['Shares Outstanding'].concat(yrs.map(function(){ return ASM.shares?ASM.shares.value:5000000; })));
+
+  } else if(modelType.indexOf('ias 16')>=0 || modelType.indexOf('pp&e')>=0){
+    rows.push(['PP&E SCHEDULE'].concat(yrs.map(function(){return '';})));
+    rows.push(['Asset Cost (USD)'].concat(yrs.map(function(){ return ASM.assetCost?ASM.assetCost.value:8000000; })));
+    rows.push(['Residual Value'].concat(yrs.map(function(){ return ASM.residual?ASM.residual.value:0; })));
+    rows.push(['Useful Life (years)'].concat(yrs.map(function(){ return ASM.usefulLife?ASM.usefulLife.value:5; })));
+    rows.push(['Depreciation Method (1=SL, 2=RB, 3=UOP)'].concat(yrs.map(function(){ return ASM.deprMethod?ASM.deprMethod.value:1; })));
+    rows.push(['Annual Capital Addition'].concat(yrs.map(function(y,i){ return ASM.additionsY1?(i===0?ASM.additionsY1.value:0):0; })));
+    rows.push(['Borrowing Cost (%)'].concat(yrs.map(function(){ return ASM.borrowCost?ASM.borrowCost.value:0; })));
+
+  } else if(modelType.indexOf('ifrs 16')>=0 || modelType.indexOf('lease')>=0){
+    rows.push(['LEASE SCHEDULE'].concat(yrs.map(function(){return '';})));
+    rows.push(['Annual Lease Payment (USD)'].concat(yrs.map(function(){ return ASM.annualPayment?ASM.annualPayment.value:120000; })));
+    rows.push(['Lease Term (years)'].concat(yrs.map(function(){ return ASM.leaseTerm?ASM.leaseTerm.value:5; })));
+    rows.push(['IBR - Incremental Borrowing Rate (%)'].concat(yrs.map(function(){ return ASM.ibr?ASM.ibr.value:5.5; })));
+    rows.push(['Initial Direct Costs (USD)'].concat(yrs.map(function(){ return ASM.idc?ASM.idc.value:3000; })));
+
+  } else if(modelType.indexOf('ifrs 9')>=0 || modelType.indexOf('ecl')>=0){
+    rows.push(['ECL / CREDIT RISK DATA'].concat(yrs.map(function(){return '';})));
+    rows.push(['Exposure at Default (EAD)'].concat(yrs.map(function(){ return ASM.ead?ASM.ead.value:10000000; })));
+    rows.push(['12-Month PD (%)'].concat(yrs.map(function(){ return ASM.pd12m?ASM.pd12m.value:2; })));
+    rows.push(['Lifetime PD (%)'].concat(yrs.map(function(){ return ASM.ltPD?ASM.ltPD.value:8; })));
+    rows.push(['Loss Given Default - LGD (%)'].concat(yrs.map(function(){ return ASM.lgd?ASM.lgd.value:40; })));
+
+  } else {
+    /* Generic: just output all assumptions as a flat table */
+    rows.push(['ASSUMPTIONS / INPUT DATA'].concat(yrs.map(function(){return '';})));
+    asmKeys.forEach(function(k){
+      var a = ASM[k];
+      rows.push([(a.label||k) + (a.unit?' ('+a.unit+')':'')].concat(yrs.map(function(){ return a.value; })));
+    });
+  }
+
+  rows.push(['']);
+  rows.push(['── END OF DUMMY INPUT ──'].concat(yrs.map(function(){return '';})));
+  rows.push(['[Upload this file to FinTech Übermensch by Bilal to auto-generate the model]']);
+  return rows;
+}
+
 
 /* ═══ SHARE ═══ */
 function openShareModal(){if(!M){showErr('Build a model first.');return;}document.getElementById('shareModel').textContent=M.modelType||'';try{var st={pr:PR,asm:{}};Object.keys(ASM).forEach(function(k){st.asm[k]=ASM[k].value;});document.getElementById('shareUrl').value=window.location.origin+window.location.pathname+'?m='+btoa(unescape(encodeURIComponent(JSON.stringify(st))));}catch(e){document.getElementById('shareUrl').value=window.location.href;}document.getElementById('shareModal').style.display='flex';}
@@ -5359,7 +5580,7 @@ function showErr(m){document.getElementById('em').textContent=m;document.getElem
 function clsErr(){document.getElementById('eb').classList.remove('show');}
 function showToast(msg){var t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;bottom:24px;right:24px;background:#00ff99;color:#000;padding:10px 20px;border-radius:6px;font-weight:700;font-size:12px;z-index:9999;transition:all .28s;opacity:0;transform:translateY(6px)';document.body.appendChild(t);}t.textContent=msg;setTimeout(function(){t.style.opacity='1';t.style.transform='translateY(0)';},10);setTimeout(function(){t.style.opacity='0';t.style.transform='translateY(6px)';},3200);}
 function showPanel(n){['ep','lp','rp'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});var tgt=n==='empty'?'ep':n==='load'?'lp':'rp';var tel=document.getElementById(tgt);if(tel)tel.style.display='flex';}
-function showTab(name,el){document.querySelectorAll('.tc').forEach(function(t){t.classList.remove('act');});document.querySelectorAll('.tb').forEach(function(t){t.classList.remove('act');});var tc=document.getElementById('tc'+name);if(tc)tc.classList.add('act');if(el)el.classList.add('act');if(name==='D')scheduleDashUpdate();if(name==='IF')initKBTab('ifrs');if(name==='IS')initKBTab('isa');}
+function showTab(name,el){document.querySelectorAll('.tc').forEach(function(t){t.classList.remove('act');});document.querySelectorAll('.tb').forEach(function(t){t.classList.remove('act');});var tc=document.getElementById('tc'+name);if(tc)tc.classList.add('act');if(el)el.classList.add('act');if(name==='D')scheduleDashUpdate();if(name==='IF')initKBTab('ifrs');}
 
 var _stMsgs=['🔍 Detecting IFRS/IAS standard...','📐 Loading Big 4 methodology...','⚙️ Validating parameters...','📊 Building financial schedule...','🧮 Running calculations...','✅ Zero-error output ready...'];
 function runSteps(){for(var i=0;i<6;i++){var s=document.getElementById('s'+i);if(s)s.className='st';}clearInterval(_stTm);var idx=0;_stTm=setInterval(function(){if(idx>0){var p=document.getElementById('s'+(idx-1));if(p)p.className='st dn';}var c=document.getElementById('s'+idx);if(c){c.className='st act';document.getElementById('lt').textContent=_stMsgs[idx]||'';}idx++;if(idx>=6)clearInterval(_stTm);},180);}
@@ -5406,160 +5627,231 @@ function processImportFile(file){
 }
 
 function parseWorkbook(wb, fname){
-  /* ── Step 1: find first data sheet (skip README/cover sheets) ── */
+  /* ── STEP 1: Find the best data sheet ── */
   var dataSheetName = wb.SheetNames[0];
   for(var si=0; si<wb.SheetNames.length; si++){
-    var sn=wb.SheetNames[si].toLowerCase();
-    if(sn.indexOf('readme')<0 && sn.indexOf('cover')<0 && sn.indexOf('index')<0 && sn.indexOf('contents')<0){
+    var sn = wb.SheetNames[si].toLowerCase();
+    /* Skip cover/index/readme sheets; prefer sheets with data */
+    if(sn.indexOf('readme')<0 && sn.indexOf('cover')<0 &&
+       sn.indexOf('index')<0 && sn.indexOf('contents')<0 &&
+       sn.indexOf('dummy')<0 && sn.indexOf('template')<0){
       dataSheetName = wb.SheetNames[si]; break;
     }
   }
 
-  /* ── Step 2: detect model type from data sheet + filename only ── */
+  /* ── STEP 2: Read ALL sheets and merge their text for detection ── */
   var allText = dataSheetName.toLowerCase() + ' ' + fname.toLowerCase() + ' ';
-  var detSheet = wb.Sheets[dataSheetName];
-  var detRows = XLSX.utils.sheet_to_json(detSheet,{header:1,defval:''});
-  detRows.slice(0,20).forEach(function(row){allText += row.join(' ').toLowerCase() + ' ';});
-  var type=detect(allText)||'DCF';
+  wb.SheetNames.forEach(function(sn){
+    var s = wb.Sheets[sn];
+    var rows = XLSX.utils.sheet_to_json(s,{header:1,defval:''});
+    rows.slice(0,30).forEach(function(row){ allText += row.join(' ').toLowerCase() + ' '; });
+  });
 
-  /* ── Step 3: read data from the detected data sheet ── */
-  var mainSheet=wb.Sheets[dataSheetName];
-  var rows=XLSX.utils.sheet_to_json(mainSheet,{header:1,defval:''});
+  /* ── STEP 3: Detect model type ── */
+  var type = detect(allText) || 'DCF';
 
-  /* ── Step 4: find year headers → numYears, startYear ── */
-  var yearPattern=/fy\s*\d{4}|\d{4}\/\d{2,4}|year\s*[123456789]/i;
-  var numYears=5, startYear=new Date().getFullYear();
+  /* ── STEP 4: Read data from the best sheet ── */
+  var mainSheet = wb.Sheets[dataSheetName];
+  var rows = XLSX.utils.sheet_to_json(mainSheet,{header:1,defval:''});
+
+  /* ── STEP 5: Find year/period headers ── */
+  var yearPattern = /fy\s*\d{4}|\d{4}\/\d{2,4}|year\s*[123456789]|\d{4}/i;
+  var numYears = 5, startYear = new Date().getFullYear();
   rows.forEach(function(row){
-    var yCount=0;
-    row.forEach(function(cell){if(yearPattern.test(String(cell)))yCount++;});
-    if(yCount>=2){
-      var found=0;
-      row.forEach(function(cell){
-        var m=String(cell).match(/20(\d\d)/);
-        if(m){found++;if(found===1)startYear=2000+parseInt(m[1]);}
-      });
-      if(found>=2) numYears=found;
+    var yrs = [];
+    row.forEach(function(cell){
+      var m = String(cell).match(/\b(20\d\d)\b/);
+      if(m) yrs.push(parseInt(m[1]));
+    });
+    if(yrs.length >= 2){
+      startYear = Math.min.apply(null, yrs);
+      numYears = Math.max(yrs.length, 3);
     }
   });
 
-  /* ── Step 5: extract all label→firstNumericValue from sheet ── */
-  var numericMap={};
+  /* ── STEP 6: Build comprehensive label → numeric value map ── */
+  /* Strategy: scan EVERY cell — if a row has a text label in col 0/1
+     and numbers in subsequent columns, extract ALL those numbers */
+  var numericMap = {}; // label (lowercase) -> first numeric value
+  var numericArrayMap = {}; // label -> array of values across years
+
   rows.forEach(function(row){
-    var label=String(row[0]||'').toLowerCase().trim();
-    if(!label||label.length<3) return;
-    /* look across all columns for the first non-zero number */
-    for(var ci=1;ci<row.length;ci++){
-      var raw=String(row[ci]||'').replace(/[$,%\s]/g,'').replace(/,/g,'');
-      var v=parseFloat(raw);
-      if(!isNaN(v)&&v!==0){numericMap[label]=v;break;}
+    /* Find the label column — usually col 0, but might be col 1 */
+    var labelCol = -1;
+    var label = '';
+    for(var ci=0; ci<Math.min(3, row.length); ci++){
+      var v = String(row[ci]||'').trim();
+      if(v.length > 2 && isNaN(parseFloat(v.replace(/[$,%\s]/g,'')))){
+        labelCol = ci; label = v.toLowerCase().trim(); break;
+      }
+    }
+    if(!label || label.length < 2) return;
+
+    /* Collect all numbers from the row */
+    var nums = [];
+    for(var ci = labelCol+1; ci < row.length; ci++){
+      var raw = String(row[ci]||'').replace(/[$,%\s,]/g,'').trim();
+      var v = parseFloat(raw);
+      if(!isNaN(v)) nums.push(v);
+    }
+
+    if(nums.length > 0){
+      /* Store first non-zero value (or first value if all are same) */
+      var firstNonZero = nums.find(function(n){ return Math.abs(n) > 0; }) || nums[0];
+      numericMap[label] = firstNonZero;
+      numericArrayMap[label] = nums;
     }
   });
 
-  /* ── Step 6: comprehensive label → ASM key mapping ── */
-  var labelMaps=[
+  /* ── STEP 7: Fuzzy match: label → ASM key ── */
+  /* Very comprehensive mapping including synonyms, abbreviations */
+  var labelMaps = [
     /* IAS 16 PP&E */
-    {keys:['asset cost','cost of asset','purchase price','gross cost'],           asm:'assetCost',  scale:1},
-    {keys:['residual value','salvage value','scrap value'],                       asm:'residual',   scale:1},
-    {keys:['useful life','economic life'],                                        asm:'usefulLife', scale:1},
-    {keys:['annual capital addition','capital addition','additions'],             asm:'additionsY1',scale:1},
-    {keys:['borrowing cost','capitalised interest'],                              asm:'borrowCost', scale:1},
-    {keys:['impairment loss','impairment'],                                       asm:'impairY3',   scale:1},
-    {keys:['depreciation method','method:'],                                      asm:'deprMethod', scale:1},
-    {keys:['reducing balance rate'],                                              asm:'rbRate',     scale:1},
-    {keys:['total estimated machine hour','total machine hour'],                  asm:'totalHours', scale:1},
-    /* DCF / LBO */
-    {keys:['revenue year 1','revenue ($m)','total revenue','net revenue','turnover'], asm:'rev1',      scale:1},
-    {keys:['ebitda margin','ebitda %'],                                           asm:'ebitdaMgn',  scale:1},
-    {keys:['revenue growth','revenue growth rate'],                               asm:'revGrowth',  scale:1},
-    {keys:['wacc','weighted average cost'],                                       asm:'wacc',       scale:1},
-    {keys:['terminal growth','tgr','perpetuity growth'],                          asm:'tgr',        scale:1},
-    {keys:['tax rate','effective tax','corporate tax'],                           asm:'taxRate',    scale:1},
-    {keys:['capex as %','capex %','capital expenditure %'],                       asm:'capexPct',   scale:1},
-    {keys:['d&a as %','depreciation as %','da %'],                                asm:'daPct',      scale:1},
-    {keys:['entry ebitda multiple','entry multiple'],                             asm:'entryMult',  scale:1},
-    {keys:['exit ebitda multiple','exit multiple'],                               asm:'exitMult',   scale:1},
-    /* IFRS 9 ECL */
-    {keys:['gross carrying amount','ead','exposure at default'],                  asm:'s1EAD',      scale:1},
-    {keys:['pd','probability of default'],                                        asm:'s1PD12m',    scale:1},
-    {keys:['lgd','loss given default'],                                           asm:'s1LGD',      scale:1},
-    {keys:['eir','effective interest rate'],                                      asm:'s1EIR',      scale:1},
+    {keys:['asset cost','cost of asset','gross cost','purchase price','cost of ppe','property plant'],       asm:'assetCost',    def:8000000},
+    {keys:['residual value','salvage value','scrap value','terminal value ppe','residual'],                  asm:'residual',     def:0},
+    {keys:['useful life','economic life','estimated life','asset life','life years'],                         asm:'usefulLife',   def:5},
+    {keys:['capital addition','additions','capital expenditure ias16','new asset'],                           asm:'additionsY1',  def:500000},
+    {keys:['borrowing cost','capitalised interest','finance cost capitalised'],                               asm:'borrowCost',   def:0},
+    {keys:['impairment','impairment loss','impairment charge','write-down'],                                  asm:'impairY3',     def:0},
+    {keys:['depreciation method','method:','dep method'],                                                     asm:'deprMethod',   def:1},
+    {keys:['reducing balance rate','rb rate','declining balance'],                                            asm:'rbRate',       def:40},
+    {keys:['machine hours','total hours','uop hours'],                                                        asm:'totalHours',   def:10000},
+
+    /* DCF Valuation */
+    {keys:['revenue year 1','revenue ($','total revenue','net revenue','turnover','sales','revenue'],         asm:'rev1',         def:50000000},
+    {keys:['ebitda margin','ebitda %','ebitda margin %','ebitda %'],                                          asm:'ebitdaMgn',    def:20},
+    {keys:['revenue growth','revenue growth rate','sales growth','growth rate'],                              asm:'revGrowth',    def:18},
+    {keys:['wacc','weighted average cost','discount rate','cost of capital'],                                 asm:'wacc',         def:11.5},
+    {keys:['terminal growth','tgr','perpetuity growth','long-term growth'],                                   asm:'tgr',          def:3},
+    {keys:['tax rate','effective tax','corporate tax','income tax rate'],                                     asm:'taxRate',      def:28},
+    {keys:['capex % revenue','capex %','capital expenditure %','capex as %'],                                 asm:'capexRatio',   def:7},
+    {keys:['d&a %','depreciation %','da %','amortisation %','d&a % revenue'],                                asm:'daRatio',      def:4},
+    {keys:['net debt','net cash','total debt net','debt less cash'],                                          asm:'netDebt',      def:8500000},
+    {keys:['shares outstanding','diluted shares','basic shares','share count'],                               asm:'shares',       def:5000000},
+    {keys:['working capital %','nwc %','working capital change %'],                                           asm:'wcRatio',      def:2},
+    {keys:['margin expansion','ebitda improvement','margin expansion pp'],                                    asm:'mgnExpansion', def:1},
+
+    /* LBO */
+    {keys:['entry ebitda','entry ebitda ($','opening ebitda'],                                                asm:'ebitda0',      def:20000000},
+    {keys:['entry multiple','entry ev/ebitda','entry ebitda multiple','acquisition multiple'],                 asm:'entryMult',    def:8},
+    {keys:['exit multiple','exit ev/ebitda','exit ebitda multiple','disposal multiple'],                       asm:'exitMult',     def:9},
+    {keys:['hold period','holding period','investment period','years held'],                                   asm:'holdYrs',      def:5},
+    {keys:['leverage %','debt %','lbo leverage','debt / ev'],                                                  asm:'leverage',     def:60},
+
     /* IFRS 16 Lease */
-    {keys:['annual lease payment','annual payment','monthly payment'],            asm:'annualPmt',  scale:1},
-    {keys:['lease term'],                                                         asm:'leaseTerm',  scale:1},
-    {keys:['incremental borrowing rate','ibr'],                                   asm:'ibr',        scale:1},
-    {keys:['initial direct cost'],                                                asm:'idc',        scale:1},
-    {keys:['rent review rate','annual rent review'],                              asm:'rentReview', scale:1},
+    {keys:['annual payment','lease payment','annual rent','monthly payment','rent'],                           asm:'annualPayment',def:120000},
+    {keys:['lease term','term years','lease duration','term'],                                                 asm:'leaseTerm',    def:5},
+    {keys:['ibr','incremental borrowing rate','implicit rate','borrowing rate'],                               asm:'ibr',          def:5.5},
+    {keys:['initial direct cost','idc','lease acquisition cost','direct cost'],                                asm:'idc',          def:3000},
+    {keys:['variable payment','variable lease','contingent rent'],                                             asm:'varPayment',   def:0},
+    {keys:['extension term','renewal option','extension years'],                                               asm:'extensionYrs', def:3},
+
+    /* IFRS 9 ECL */
+    {keys:['exposure at default','ead','gross exposure','loan balance'],                                       asm:'ead',          def:10000000},
+    {keys:['12-month pd','12m pd','pd 12m','stage 1 pd','probability of default'],                            asm:'pd12m',        def:2},
+    {keys:['lifetime pd','lt pd','stage 2 pd','lifetime probability'],                                        asm:'ltPD',         def:8},
+    {keys:['lgd','loss given default','severity','recovery rate'],                                             asm:'lgd',          def:40},
+    {keys:['stage 2 %','sicr threshold','staging threshold'],                                                  asm:'stg2Pct',      def:25},
+
     /* IAS 19 Pension */
-    {keys:['opening dbo','defined benefit obligation'],                           asm:'openDBO',    scale:1},
-    {keys:['opening fair value plan asset','opening plan asset'],                 asm:'openAssets', scale:1},
-    {keys:['discount rate (aa','discount rate'],                                  asm:'discRate',   scale:1},
-    {keys:['salary growth rate','salary escalation'],                             asm:'salGrowth',  scale:1},
-    {keys:['expected asset return','asset return'],                               asm:'assetRet',   scale:1},
-    {keys:['current service cost'],                                               asm:'currSvc',    scale:1},
-    {keys:['employer contribution'],                                              asm:'empContrib', scale:1},
-    {keys:['benefits paid'],                                                      asm:'benefits',   scale:1},
+    {keys:['opening dbo','defined benefit obligation','pbo','projected benefit obligation'],                   asm:'openingDBO',   def:480000000},
+    {keys:['plan assets','pension assets','fund assets'],                                                      asm:'planAssets',   def:440000000},
+    {keys:['current service cost','service cost','benefit earned'],                                            asm:'serviceCost',  def:12000000},
+    {keys:['contributions','employer contributions','pension contributions'],                                  asm:'contributions',def:18000000},
+    {keys:['actuarial loss','actuarial gain','remeasurement'],                                                 asm:'actuarialLoss',def:25000000},
+
     /* IAS 36 Impairment */
-    {keys:['carrying amount','cgu carrying'],                                     asm:'carrying',   scale:1},
-    /* IAS 37 Provisions */
-    {keys:['warranty provision','warranty cost'],                                 asm:'warrantyCost',scale:1},
-    /* IFRS 17 Insurance */
-    {keys:['premiums','gross written premium'],                                   asm:'premiums',   scale:1},
+    {keys:['cgu carrying amount','carrying amount','net book value cgu','cgu ca'],                             asm:'cguCA',        def:50000000},
+    {keys:['discount rate ias36','pre-tax wacc','required return'],                                           asm:'discountRate',  def:12},
+    {keys:['fcf year 1','free cash flow','operating cash flow'],                                               asm:'fcf1',         def:5000000},
+    {keys:['growth rate ias36','long term growth','perpetuity growth ias36'],                                  asm:'growthRate',    def:2},
+
+    /* IAS 37 */
+    {keys:['best estimate','provision amount','liability estimate'],                                           asm:'provisionAmt',  def:5000000},
+    {keys:['discount rate ias37','risk free rate','provision discount'],                                       asm:'provisionDisc',  def:3},
+
+    /* IFRS 3 */
+    {keys:['consideration','purchase price','acquisition cost','deal value'],                                  asm:'consideration', def:250000000},
+    {keys:['net identifiable assets','fv of net assets','ppa net assets'],                                    asm:'netIdentifiable',def:200000000},
+    {keys:['nci %','non-controlling interest %','minority interest %'],                                       asm:'nciPercent',    def:20},
+
+    /* IAS 12 */
+    {keys:['temporary difference','taxable temporary difference','deductible td'],                             asm:'tempDiff',      def:10000000},
+    {keys:['dta opening','opening dta','brought forward dta'],                                                 asm:'dtaOpen',       def:0},
+    {keys:['dtl opening','opening dtl'],                                                                       asm:'dtlOpen',       def:0},
+
+    /* IFRS 17 */
+    {keys:['csm opening','contractual service margin','csm balance'],                                          asm:'csmOpen',       def:50000000},
+    {keys:['insurance revenue','earned premium','premium revenue'],                                            asm:'insuranceRev',  def:200000000},
+    {keys:['claims','claims incurred','loss ratio'],                                                           asm:'claims',        def:140000000},
+
+    /* DDM */
+    {keys:['dividend','expected dividend','d1','annual dividend'],                                             asm:'div1',          def:2.5},
+    {keys:['cost of equity','ke','required return equity'],                                                    asm:'costEquity',    def:10},
+    {keys:['dividend growth','div growth','dividend growth rate'],                                             asm:'divGrowth',     def:4},
+
+    /* COMPS */
+    {keys:['ev/ebitda','enterprise value/ebitda','ev ebitda multiple'],                                       asm:'evEbitda',      def:12},
+    {keys:['p/e ratio','pe ratio','price earnings'],                                                           asm:'peRatio',       def:20},
+
+    /* Generic */
+    {keys:['start year','base year','first year'],                                                             asm:'startYear',     def:new Date().getFullYear()},
+    {keys:['currency'],                                                                                        asm:'currency',      def:'USD'},
   ];
 
-  var asmUpdates={};
-  Object.keys(numericMap).forEach(function(label){
-    labelMaps.forEach(function(map){
-      if(!asmUpdates[map.asm]){
-        if(map.keys.some(function(k){return label.indexOf(k)>=0;})){
-          asmUpdates[map.asm]=numericMap[label];
+  /* ── STEP 8: Apply matched values to ASM ── */
+  var matched = {}, skipped = [];
+  labelMaps.forEach(function(mapping){
+    if(!ASM[mapping.asm]) return; // ASM key not in current model
+    var found = false;
+    mapping.keys.forEach(function(key){
+      if(found) return;
+      /* Exact and partial match */
+      Object.keys(numericMap).forEach(function(lbl){
+        if(found) return;
+        if(lbl.indexOf(key) >= 0 || key.indexOf(lbl) >= 0){
+          var v = numericMap[lbl];
+          /* Smart unit conversion */
+          var unit = (ASM[mapping.asm].unit||'').toLowerCase();
+          /* If value looks like it should be a % but is stored as decimal (0.18 not 18) */
+          if(unit==='%' && Math.abs(v) > 0 && Math.abs(v) < 2 && mapping.def > 2){
+            v = v * 100; /* Convert 0.18 → 18 */
+          }
+          /* If millions marker */
+          if(unit==='usd' && Math.abs(v) < 1000 && mapping.def > 100000){
+            v = v * 1000000; /* Assume input in millions: 50 → 50,000,000 */
+          }
+          ASM[mapping.asm].value = v;
+          matched[mapping.asm] = lbl + ' = ' + v;
+          found = true;
         }
-      }
+      });
     });
+    if(!found) skipped.push(mapping.asm);
   });
 
-  /* ── Step 7: build the model prompt ── */
-  var prompts={
-    'IFRS9':'IFRS 9 ECL model','IFRS16':'IFRS 16 lease',
-    'IFRS18':'IFRS 18 income statement','IAS16':'IAS 16 PP&E depreciation',
-    'IAS19':'IAS 19 defined benefit pension','IAS36':'IAS 36 impairment test',
-    'IAS38':'IAS 38 intangible assets','IAS12':'IAS 12 deferred tax',
-    'IAS2':'IAS 2 inventory','IAS37':'IAS 37 provisions',
-    'IFRS15':'IFRS 15 revenue recognition','IFRS17':'IFRS 17 insurance',
-    'DCF':'DCF valuation','LBO':'LBO leveraged buyout',
-  };
-  var basePrompt=(prompts[type]||'DCF valuation')+' '+numYears+' years from '+startYear;
-  document.getElementById('pta').value=basePrompt;
+  /* ── STEP 9: Apply startYear and numYears to ASM ── */
+  if(ASM.startYear) ASM.startYear.value = startYear;
+  if(ASM.numYears) ASM.numYears.value = numYears;
 
-  /* ── Step 8: reset state and build model cleanly ── */
-  PR=basePrompt; ASM={}; _USER_ASM={}; _cellOverrides={};
-
-  /* Pre-populate ASM with imported values BEFORE getModel calls freshASM.
-     freshASM() preserves existing values, so inject first. */
-  Object.keys(asmUpdates).forEach(function(k){
-    ASM[k]={label:k, value:asmUpdates[k], unit:''};
-  });
-
-  /* Build — freshASM inside will see our pre-injected values and preserve them */
-  var model=getModel(basePrompt);
-  M=model; PR=basePrompt;
-
-  /* Belt-and-suspenders: reapply overrides in case freshASM used a default */
-  Object.keys(asmUpdates).forEach(function(k){
-    if(ASM[k]!==undefined) ASM[k].value=asmUpdates[k];
-  });
-
-  /* Recompute the model with correct ASM values, then render */
-  var finalModel=getModel(basePrompt);
-  M=finalModel;
-
-  renderModel(finalModel);
-  renderAssumptions();
-
-  var mapped=Object.keys(asmUpdates).length;
-  showImportStatus('✓ Imported: '+dataSheetName+' → '+finalModel.ifrsStandard+' | '+numYears+' yrs from '+startYear+' | '+mapped+' assumptions mapped: '+Object.keys(asmUpdates).join(', '));
-  showTab('T', document.querySelectorAll('.tb')[0]);
-  closeImportModal();
+  /* ── STEP 10: Build and render the model ── */
+  var matchCount = Object.keys(matched).length;
+  var result = getModel(type + ' model');
+  if(result){
+    M = result;
+    /* Override ASM values from import BEFORE rendering */
+    renderModel(result);
+    closeImportModal();
+    showToast('✓ Imported ' + matchCount + ' values from ' + fname + ' → ' + type + ' model built');
+    /* Show import summary */
+    var summary = 'Detected: ' + type + ' | Mapped: ' + matchCount + ' assumptions | Start: ' + startYear + ' | Years: ' + numYears;
+    if(skipped.length > 0) summary += ' | Note: ' + skipped.slice(0,3).join(', ') + ' not found in file';
+    document.getElementById('stx').textContent = summary;
+  } else {
+    showErr('Could not build ' + type + ' model from uploaded data.');
+  }
 }
+
 
 function showImportStatus(msg){
   var el=document.getElementById('importStatus');
@@ -5813,566 +6105,108 @@ document.addEventListener('DOMContentLoaded',function(){
   try{initImport();}catch(e){}
   try{loadSharedState();}catch(e){}
 });
+
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<style>
+<script>
+(function(){
+  if(typeof XLSX !== 'undefined') return;
+  function colName(n){
+    var s=''; n++;
+    while(n>0){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26);}
+    return s;
+  }
+  function encCell(r){return colName(r.c)+(r.r+1);}
+  function decRange(s){
+    var p=s.split(':');
+    function dc(a){
+      var col=0,i=0;
+      while(i<a.length&&a[i]>='A'&&a[i]<='Z'){col=col*26+(a.charCodeAt(i)-64);i++;}
+      return{r:parseInt(a.slice(i))-1,c:col-1};
+    }
+    return p.length===2?{s:dc(p[0]),e:dc(p[1])}:{s:dc(p[0]),e:dc(p[0])};
+  }
+  function aoaToSheet(data){
+    var ws={},maxR=0,maxC=0;
+    (data||[]).forEach(function(row,R){
+      if(!Array.isArray(row))return;
+      row.forEach(function(v,C){
+        if(v===null||v===undefined||v==='')return;
+        var ref=colName(C)+(R+1);
+        if(v&&typeof v==='object'&&v.f){ws[ref]={t:'n',v:0,f:v.f};}
+        else if(typeof v==='number'){ws[ref]={t:'n',v:v};}
+        else{ws[ref]={t:'s',v:String(v)};}
+        if(R>maxR)maxR=R;if(C>maxC)maxC=C;
+      });
+    });
+    ws['!ref']='A1:'+colName(maxC)+(maxR+1);
+    return ws;
+  }
+  function sheetToJSON(ws,opts){
+    if(!ws||!ws['!ref'])return[];
+    var r=decRange(ws['!ref']),rows=[],h1=opts&&opts.header===1,dv=opts&&opts.defval!==undefined?opts.defval:'';
+    for(var R=r.s.r;R<=r.e.r;R++){
+      var row=h1?[]:[];
+      for(var C=r.s.c;C<=r.e.c;C++){
+        var cell=ws[colName(C)+(R+1)];
+        row.push(cell&&cell.v!==undefined?cell.v:dv);
+      }
+      rows.push(row);
+    }
+    return rows;
+  }
+  function escX(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function buildCSV(wb){
+    var out='';
+    (wb.SheetNames||[]).forEach(function(name){
+      var ws=wb.Sheets[name];if(!ws||!ws['!ref'])return;
+      out+='=== '+name+' ===\n';
+      var r=decRange(ws['!ref']);
+      for(var R=r.s.r;R<=r.e.r;R++){
+        var row=[];
+        for(var C=r.s.c;C<=r.e.c;C++){
+          var cell=ws[colName(C)+(R+1)];
+          var v=cell?cell.v!==undefined?cell.v:'':'';
+          row.push('"'+String(v).replace(/"/g,'""')+'"');
+        }
+        out+=row.join(',')+'\n';
+      }
+      out+='\n';
+    });
+    return out;
+  }
+  window.XLSX={
+    utils:{
+      book_new:function(){return{SheetNames:[],Sheets:{}};},
+      book_append_sheet:function(wb,ws,name){var n=name||('Sheet'+(wb.SheetNames.length+1));wb.SheetNames.push(n);wb.Sheets[n]=ws;},
+      aoa_to_sheet:aoaToSheet,
+      encode_col:colName,
+      encode_cell:encCell,
+      decode_range:decRange,
+      sheet_to_json:sheetToJSON
+    },
+    read:function(){return{SheetNames:['Sheet1'],Sheets:{'Sheet1':{'!ref':'A1:A1'}}};},
+    writeFile:function(wb,fname){
+      var csv=buildCSV(wb);
+      var fn=fname.replace('.xlsx','_export.csv');
+      var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      var url=URL.createObjectURL(blob);
+      var a=document.createElement('a');
+      a.href=url;a.download=fn;document.body.appendChild(a);a.click();
+      document.body.removeChild(a);URL.revokeObjectURL(url);
+      if(typeof showToast==='function')showToast('Exported as CSV — open in Excel. Go online for full .xlsx format');
+    },
+    version:'fallback'
+  };
+})();
+</script>
 
-/* ═══════════════════════════════════════════════════
-   FinTech Übermensch by Bilal — Design System
-   Inspired by Apple HIG dark mode + Big4 data clarity
-   Primary: pure black / Pure white / Accent emerald
-═══════════════════════════════════════════════════ */
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{
-  height:100%;overflow:hidden;
-  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif;
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-  font-size:13px;
-}
-body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:#111}
-::-webkit-scrollbar-thumb{background:#333;border-radius:6px}
-::-webkit-scrollbar-thumb:hover{background:#444}
-@keyframes spin{to{transform:rotate(360deg)}}
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
 
-/* ─── HEADER ─── */
-#hdr{
-  height:48px;display:flex;align-items:center;justify-content:space-between;
-  padding:0 20px;background:#111;border-bottom:1px solid #222;
-  flex-shrink:0;gap:12px;
-}
-#logo{
-  font-weight:700;font-size:14px;display:flex;align-items:center;
-  gap:6px;letter-spacing:-.3px;white-space:nowrap;color:#fff;
-}
-#ldot{
-  width:10px;height:10px;border-radius:50%;flex-shrink:0;
-  background:linear-gradient(135deg,#c850f0,#7c3aed);
-  box-shadow:0 0 10px rgba(200,80,240,.7),0 0 20px rgba(124,58,237,.4);
-  animation:pulseLogo 2s ease-in-out infinite;
-}
-@keyframes pulseLogo{0%,100%{box-shadow:0 0 10px rgba(200,80,240,.7);}50%{box-shadow:0 0 18px rgba(200,80,240,1),0 0 28px rgba(124,58,237,.6);}}
-#logo-ft{
-  font-size:13px;font-weight:800;letter-spacing:.5px;
-  background:linear-gradient(90deg,#a78bfa,#c084fc);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-}
-#logo-ub{
-  font-size:15px;font-weight:900;letter-spacing:-.5px;
-  background:linear-gradient(90deg,#c850f0,#f472b6,#fb923c);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  text-shadow:none;
-  font-style:italic;
-}
-#logo-by{font-size:11px;color:#9ca3af;font-weight:400;}
-#logo-by strong{color:#e9d5ff;font-weight:700;}
-#badge{
-  font-size:9px;color:#636366;border:1px solid #2c2c2e;
-  padding:3px 10px;border-radius:12px;font-family:ui-monospace,monospace;
-  white-space:nowrap;letter-spacing:.4px;
-}
-#hdrBtns{display:flex;gap:6px;align-items:center}
-.hbtn{
-  background:#1c1c1e;border:1px solid #2c2c2e;color:#8e8e93;
-  border-radius:8px;padding:5px 12px;font-size:10px;cursor:pointer;
-  transition:all .15s;white-space:nowrap;font-family:inherit;font-weight:500;
-}
-.hbtn:hover{border-color:#30d158;color:#fff;background:#1c2e1e}
-.hbtn.g{background:rgba(48,209,88,.12);border-color:rgba(48,209,88,.4);color:#30d158;font-weight:600}
-.hbtn.g:hover{background:rgba(48,209,88,.18)}
 
-/* ─── LAYOUT ─── */
-#lay{display:grid;grid-template-columns:268px 1fr;flex:1;min-height:0;overflow:hidden}
-
-/* ─── SIDEBAR ─── */
-#sb{
-  background:#0a0a0a;border-right:1px solid #1c1c1e;
-  overflow-y:auto;padding:12px 8px;display:flex;flex-direction:column;gap:6px;
-}
-.sl{
-  font-family:ui-monospace,monospace;font-size:8px;color:#3a3a3c;
-  text-transform:uppercase;letter-spacing:2px;
-  padding:8px 4px 4px;border-bottom:1px solid #1c1c1e;margin-top:6px;flex-shrink:0;
-}
-#pta{
-  background:#1c1c1e;border:1px solid #2c2c2e;border-radius:10px;
-  color:#f5f5f7;font-family:inherit;font-size:12px;
-  padding:10px 11px;resize:vertical;min-height:82px;outline:none;
-  width:100%;line-height:1.65;
-}
-#pta:focus{border-color:rgba(48,209,88,.5);box-shadow:0 0 0 3px rgba(48,209,88,.1)}
-#pta::placeholder{color:#48484a}
-#bbn{
-  background:linear-gradient(135deg,#30d158,#25a244);color:#000;
-  border:none;border-radius:10px;padding:10px;font-weight:700;
-  font-size:12.5px;cursor:pointer;width:100%;letter-spacing:-.1px;
-  transition:all .15s;font-family:inherit;
-}
-#bbn:hover{filter:brightness(1.08)}
-#bbn:disabled{background:#1c1c1e;cursor:not-allowed;color:#3a3a3c;opacity:1}
-.qc{
-  background:#1c1c1e;border:1px solid #2c2c2e;border-radius:8px;
-  padding:7px 10px;font-size:11px;color:#8e8e93;cursor:pointer;
-  display:flex;align-items:center;gap:8px;width:100%;text-align:left;transition:all .12s;
-}
-.qc:hover{border-color:rgba(48,209,88,.35);color:#f5f5f7;background:#2c2c2e}
-.qt{
-  font-family:ui-monospace,monospace;font-size:8px;
-  background:rgba(10,132,255,.15);color:#0a84ff;
-  padding:2px 7px;border-radius:5px;flex-shrink:0;min-width:48px;
-  text-align:center;letter-spacing:.3px;font-weight:600;
-}
-.hi{
-  background:none;border:1px solid transparent;border-radius:7px;
-  padding:5px 9px;font-size:11px;color:#636366;cursor:pointer;
-  text-align:left;width:100%;transition:all .1s;
-}
-.hi:hover{border-color:#2c2c2e;color:#aeaeb2}
-.hi.act{border-color:rgba(48,209,88,.3);color:#30d158;background:rgba(48,209,88,.06);font-weight:500}
-
-/* ─── MAIN ─── */
-#mn{display:flex;flex-direction:column;overflow:hidden;min-height:0}
-#eb{
-  display:none;background:rgba(255,69,58,.08);border:1px solid rgba(255,69,58,.25);
-  border-radius:8px;padding:8px 14px;font-size:11px;color:#ff453a;
-  margin:8px 12px 0;flex-shrink:0;justify-content:space-between;align-items:center;gap:8px;
-}
-#eb.show{display:flex}
-#ec{background:none;border:none;color:#ff453a;cursor:pointer;font-size:16px;padding:0}
-
-/* ─── PANELS ─── */
-.pnl{flex:1;display:none;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
-#ep{gap:16px;padding:36px;text-align:center}
-#ep h1{
-  font-size:22px;font-weight:700;letter-spacing:-.5px;
-  background:linear-gradient(120deg,#30d158 0%,#0a84ff 60%,#bf5af2 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-}
-#ep p{color:#636366;font-size:12px;max-width:460px;line-height:1.8;margin-top:8px}
-.ec{
-  background:#1c1c1e;border:1px solid #2c2c2e;border-radius:14px;
-  padding:3px 12px;font-size:10px;color:#636366;cursor:pointer;
-  transition:all .12s;display:inline-block;margin:3px;
-}
-.ec:hover{border-color:rgba(48,209,88,.35);color:#30d158}
-#lp{gap:14px}
-#sp{width:34px;height:34px;border:2px solid #2c2c2e;border-top-color:#30d158;border-radius:50%;animation:spin .7s linear infinite}
-#lt{font-family:ui-monospace,monospace;font-size:11px;color:#636366;min-height:16px}
-#sts{display:flex;flex-direction:column;gap:4px;max-width:280px;width:100%}
-.st{
-  font-family:ui-monospace,monospace;font-size:10px;
-  padding:4px 10px;border-radius:6px;border:1px solid #1c1c1e;color:#636366;transition:all .15s;
-}
-.st.act{border-color:rgba(48,209,88,.3);color:#30d158;background:rgba(48,209,88,.05)}
-.st.dn{opacity:.2}
-
-/* ─── RESULT PANEL ─── */
-#rp{flex:1;display:none;flex-direction:column;overflow:hidden;animation:fadeIn .2s}
-#rh{
-  padding:10px 18px;border-bottom:1px solid #1c1c1e;
-  display:flex;align-items:flex-start;justify-content:space-between;
-  gap:10px;flex-wrap:wrap;flex-shrink:0;background:#0a0a0a;
-}
-#rt{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;color:#fff;letter-spacing:-.2px}
-#rb{
-  font-family:ui-monospace,monospace;font-size:8.5px;padding:3px 9px;
-  border-radius:6px;border:1px solid rgba(48,209,88,.3);
-  color:#30d158;background:rgba(48,209,88,.08);font-weight:600;
-}
-#rm{font-size:10px;color:#636366;margin-top:3px;font-family:ui-monospace,monospace}
-#ra{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
-.abtn{
-  background:#1c1c1e;border:1px solid #2c2c2e;border-radius:8px;
-  padding:5px 12px;font-size:10px;color:#8e8e93;cursor:pointer;
-  transition:all .12s;white-space:nowrap;font-weight:500;
-}
-.abtn:hover{border-color:rgba(48,209,88,.35);color:#f5f5f7}
-#xbtn{
-  background:linear-gradient(135deg,#30d158,#25a244);color:#000;
-  border:none;border-radius:8px;padding:5px 13px;font-size:10px;
-  font-weight:700;cursor:pointer;transition:filter .15s;
-}
-#xbtn:hover{filter:brightness(1.1)}
-
-/* ─── TABS ─── */
-#tbs{
-  display:flex;border-bottom:1px solid #1c1c1e;background:#0a0a0a;
-  flex-shrink:0;overflow-x:auto;padding:0 16px;
-}
-.tb{
-  padding:10px 14px;font-size:11px;font-family:inherit;
-  color:#636366;background:none;border:none;
-  border-bottom:2px solid transparent;cursor:pointer;
-  margin-bottom:-1px;transition:color .12s;white-space:nowrap;
-  letter-spacing:-.1px;font-weight:500;
-}
-.tb:hover{color:#aeaeb2}
-.tb.act{color:#30d158;border-bottom-color:#30d158;font-weight:600}
-.tc{display:none;flex:1;overflow:auto;flex-direction:column;min-height:0}
-.tc.act{display:flex}
-
-/* ═══════════════════════════════════════════════════
-   TABLE — THE CORE MODEL OUTPUT
-   High contrast, bold, legible. Every row readable.
-═══════════════════════════════════════════════════ */
-#tw{flex:1;overflow:auto;position:relative;min-height:0}
-#mt{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
-
-/* Column headers */
-#mt thead tr{background:#111}
-#mt th{
-  background:#111;border:1px solid #1c1c1e;
-  padding:8px 12px;
-  font-family:ui-monospace,monospace;font-size:9px;
-  color:#8e8e93;white-space:nowrap;
-  position:sticky;top:0;z-index:3;font-weight:600;
-  letter-spacing:.6px;text-transform:uppercase;
-}
-#mt th:first-child{z-index:4;text-align:left}
-
-/* Data cells */
-#mt td{border:1px solid #1c1c1e;padding:0;white-space:nowrap;background:#000}
-#mt td:first-child{background:#0a0a0a}
-#mt td.n{text-align:right}
-#mt td.tc{border-left:2px solid rgba(48,209,88,.3)!important}
-
-/* Row label — BOLD WHITE, main visual element */
-.row-label{
-  display:inline-block;padding:5px 12px;
-  font-size:12px;max-width:260px;
-  overflow:hidden;text-overflow:ellipsis;
-  color:#e5e5ea;  /* Apple primary label on dark */
-  vertical-align:middle;
-  font-weight:500;letter-spacing:-.1px;
-}
-
-/* Formula ƒ button */
-.f-btn{
-  display:inline-block;font-size:9px;color:#3a3a3c;cursor:pointer;
-  padding:2px 5px;border-radius:4px;vertical-align:middle;
-  transition:all .1s;user-select:none;font-family:ui-monospace,monospace;
-}
-.f-btn:hover{color:#30d158;background:rgba(48,209,88,.1)}
-
-/* Dash / empty cells */
-.nil{color:#3a3a3c;font-size:11px;padding:0 10px;display:block;text-align:right}
-
-/* Text-only cells */
-.txt-cell{
-  color:#8e8e93;font-size:11px;padding:4px 10px;
-  display:block;text-align:right;font-family:ui-monospace,monospace;
-}
-
-/* Number inputs — the actual values, bold and white */
-.cv{
-  display:block;width:100%;border:none;outline:none;
-  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
-  font-size:12px;font-weight:600;
-  text-align:right;padding:5px 12px;
-  background:transparent;
-  color:#f5f5f7;  /* bright white — always readable */
-  transition:box-shadow .1s,background .1s;
-  letter-spacing:.1px;
-}
-.cv:focus{
-  background:rgba(48,209,88,.06)!important;
-  box-shadow:inset 0 0 0 1px rgba(48,209,88,.4);
-}
-
-/* ── SECTION HEADER rows — subtle separator ── */
-#mt tr.sh td{background:#0a0a0a;border-top:2px solid #1c1c1e}
-#mt tr.sh td:first-child{background:#0a0a0a}
-.sh .row-label,.sh td{
-  color:#48484a;  /* Apple tertiary label */
-  font-size:9px;font-weight:700;
-  letter-spacing:1.8px;text-transform:uppercase;
-  padding:10px 12px 4px;
-  font-family:ui-monospace,monospace;
-}
-
-/* ── SUBTOTAL rows ── */
-#mt tr.sub td{background:#0d0d0d}
-#mt tr.sub td:first-child{background:#0d0d0d}
-.sub .row-label{color:#34c759;font-weight:600;font-size:12px}  /* Apple green */
-
-/* ── TOTAL rows — standout ── */
-#mt tr.tot td{
-  background:rgba(48,209,88,.07);
-  border-top:1px solid rgba(48,209,88,.2);
-}
-#mt tr.tot td:first-child{background:rgba(48,209,88,.07)}
-.tot .row-label{
-  color:#30d158;font-weight:700;font-size:12.5px;letter-spacing:-.1px;
-}
-
-/* Row hover */
-#mt tbody tr:not(.sh):hover td{background:rgba(255,255,255,.03)!important}
-
-/* ─── ASSUMPTIONS TAB ─── */
-#atop{
-  padding:10px 16px;border-bottom:1px solid #1c1c1e;
-  display:flex;align-items:center;justify-content:space-between;
-  flex-shrink:0;background:#0a0a0a;gap:8px;
-}
-#atop span{font-family:ui-monospace,monospace;font-size:10px;color:#636366}
-#rcb{
-  background:rgba(48,209,88,.08);border:1px solid rgba(48,209,88,.25);
-  color:#30d158;border-radius:8px;padding:5px 15px;
-  font-family:ui-monospace,monospace;font-size:10px;cursor:pointer;transition:all .12s;font-weight:600;
-}
-#rcb:hover{background:rgba(48,209,88,.14)}
-#ag{overflow-y:auto;flex:1;padding:14px 16px;display:flex;flex-direction:column;gap:18px}
-.asm-section{display:flex;flex-direction:column;gap:10px}
-.asm-sec-hdr{
-  font-family:ui-monospace,monospace;font-size:9px;color:#636366;
-  text-transform:uppercase;letter-spacing:1.5px;
-  padding-bottom:8px;border-bottom:1px solid #1c1c1e;font-weight:600;
-}
-.asm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:8px}
-.ac{
-  background:#111;border:1px solid #1c1c1e;border-radius:10px;
-  padding:11px 12px;transition:all .15s;position:relative;
-}
-.ac:hover{border-color:rgba(48,209,88,.3);background:#141414}
-.ac-custom{border-color:rgba(10,132,255,.2);background:#0d1117}
-.ac-custom:hover{border-color:rgba(10,132,255,.4)}
-.al{
-  font-family:ui-monospace,monospace;font-size:8px;color:#636366;
-  text-transform:uppercase;letter-spacing:.8px;margin-bottom:7px;line-height:1.4;font-weight:500;
-}
-.ar{display:flex;align-items:baseline;gap:5px}
-.ai{
-  background:transparent;border:none;
-  border-bottom:1px solid #2c2c2e;
-  color:#f5f5f7;font-size:16px;font-weight:700;
-  width:100%;outline:none;padding:3px 0;
-  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
-  transition:border-color .12s;
-}
-.ai:focus{border-bottom-color:#30d158}
-.au{font-size:9px;color:#636366;flex-shrink:0;font-weight:500}
-.asm-del{position:absolute;top:7px;right:8px;color:#3a3a3c;font-size:11px;cursor:pointer;transition:color .1s}
-.asm-del:hover{color:#ff453a}
-.add-asm-btn{
-  background:#111;border:1px dashed rgba(48,209,88,.25);border-radius:10px;
-  padding:9px 14px;font-size:11px;color:#30d158;cursor:pointer;width:100%;
-  transition:all .12s;font-family:inherit;margin-top:4px;font-weight:500;
-}
-.add-asm-btn:hover{background:rgba(48,209,88,.07);border-style:solid}
-.asm-note{
-  font-size:10px;color:#48484a;background:#0d0d0d;
-  border-radius:8px;padding:10px 13px;line-height:1.75;
-  border-left:2px solid rgba(48,209,88,.25);
-}
-.asm-note strong{color:#636366}
-
-/* ─── ANALYSIS / NOTES ─── */
-.cp{padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
-.ab{border-left:3px solid #30d158;background:#0d0d0d;border-radius:0 8px 8px 0;padding:12px 16px}
-.at{font-family:ui-monospace,monospace;font-size:9px;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:7px;font-weight:700;color:#30d158}
-.ap{font-size:12px;color:#aeaeb2;line-height:1.8}
-.aul{padding-left:18px;margin-top:5px}
-.ali{font-size:11.5px;color:#aeaeb2;line-height:1.8;margin-bottom:4px}
-.nb{background:#0d0d0d;border:1px solid #1c1c1e;border-radius:10px;padding:14px 16px}
-.nh{
-  font-family:ui-monospace,monospace;font-size:9px;color:#30d158;
-  text-transform:uppercase;letter-spacing:1.5px;
-  margin-bottom:8px;display:flex;align-items:center;gap:9px;font-weight:600;
-}
-.note-num{background:rgba(48,209,88,.12);color:#30d158;border-radius:4px;padding:1px 7px;font-size:8px}
-.np{font-size:12px;color:#8e8e93;line-height:1.8}
-
-/* ─── DASHBOARD ─── */
-.dash-wrap{padding:16px 18px;overflow-y:auto;flex:1}
-.dash-empty{color:#3a3a3c;font-family:ui-monospace,monospace;font-size:12px;padding:48px;text-align:center}
-.dash-header{margin-bottom:16px}
-.dash-model-name{font-weight:700;font-size:14px;color:#fff;margin-bottom:4px;letter-spacing:-.2px}
-.dash-desc{font-size:11px;color:#636366;font-family:ui-monospace,monospace}
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:18px}
-.kpi-card{
-  background:#111;border:1px solid #1c1c1e;border-radius:12px;
-  padding:14px 16px;border-left:3px solid #30d158;
-}
-.kpi-val{
-  font-size:22px;font-weight:700;color:#fff;
-  margin-bottom:5px;font-family:ui-monospace,monospace;
-  letter-spacing:-.5px;
-}
-.kpi-lbl{font-size:9px;color:#636366;text-transform:uppercase;letter-spacing:1px;font-family:ui-monospace,monospace;font-weight:500}
-.chart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:18px}
-.chart-card{background:#111;border:1px solid #1c1c1e;border-radius:12px;padding:16px}
-.chart-title{
-  font-family:ui-monospace,monospace;font-size:9px;
-  color:#8e8e93;text-transform:uppercase;letter-spacing:1.5px;
-  margin-bottom:12px;font-weight:600;
-}
-.chart-body{min-height:210px}
-.no-data{color:#3a3a3c;font-size:10px;padding:20px;text-align:center;font-family:ui-monospace,monospace}
-.trend-wrap{background:#111;border:1px solid #1c1c1e;border-radius:10px;overflow:auto;margin-top:6px}
-.trend-table{width:100%;border-collapse:collapse;font-size:11px;font-family:ui-monospace,monospace}
-.trend-table th{
-  background:#0a0a0a;padding:7px 12px;color:#636366;
-  font-size:9px;text-transform:uppercase;letter-spacing:1px;
-  border-bottom:1px solid #1c1c1e;font-weight:600;
-}
-.trend-table td{padding:6px 12px;border-bottom:1px solid #111;color:#aeaeb2;text-align:right}
-.trend-table td.tl{text-align:left;color:#d1d1d6}
-.trend-table td.pos{color:#30d158;font-weight:600}
-.trend-table td.neg{color:#ff453a;font-weight:600}
-.trend-table td.nil{color:#3a3a3c}
-.trend-table tbody tr:hover td{background:rgba(255,255,255,.02)}
-
-/* ─── MODALS ─── */
-.modal-overlay{
-  display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,.85);z-index:2000;
-  align-items:center;justify-content:center;
-  backdrop-filter:blur(12px);
-}
-.modal-box{
-  background:#111;border:1px solid #2c2c2e;border-radius:16px;
-  padding:26px;max-width:540px;width:94%;
-  box-shadow:0 48px 120px rgba(0,0,0,.9);max-height:94vh;overflow-y:auto;
-}
-.modal-title{font-weight:700;font-size:15px;margin-bottom:5px;display:flex;align-items:center;gap:9px;color:#fff;letter-spacing:-.2px}
-.modal-sub{color:#636366;font-size:11px;margin-bottom:18px}
-.modal-close{
-  background:none;border:1px solid #2c2c2e;color:#636366;
-  border-radius:6px;padding:5px 13px;cursor:pointer;font-size:12px;flex-shrink:0;transition:all .12s;
-}
-.modal-close:hover{border-color:#30d158;color:#30d158}
-
-/* Formula modal */
-.fm-box{
-  background:#0a0a0a;border:1px solid rgba(48,209,88,.2);border-radius:8px;
-  padding:14px 16px;font-family:ui-monospace,monospace;font-size:12.5px;
-  color:#30d158;margin-bottom:12px;line-height:1.7;
-}
-.fm-std{
-  font-size:10px;color:#636366;font-style:italic;
-  margin-bottom:12px;padding:8px 12px;
-  border-left:2px solid rgba(48,209,88,.2);
-}
-.fm-sec-lbl{
-  font-family:ui-monospace,monospace;font-size:9px;color:#636366;
-  text-transform:uppercase;letter-spacing:1.5px;margin-top:12px;margin-bottom:6px;
-}
-.fm-list{padding-left:16px;margin:0}
-.fm-list li{font-size:11.5px;color:#aeaeb2;line-height:1.85;margin-bottom:3px}
-.fm-note{
-  font-size:11px;color:#636366;background:#0a0a0a;
-  border-radius:6px;padding:10px 13px;margin-top:12px;line-height:1.7;
-}
-
-/* Add assumption modal */
-.asm-form{display:flex;flex-direction:column;gap:13px}
-.asm-field{display:flex;flex-direction:column;gap:6px}
-.asm-field label{font-family:ui-monospace,monospace;font-size:9px;color:#636366;text-transform:uppercase;letter-spacing:1px;font-weight:600}
-.asm-field input{
-  background:#0a0a0a;border:1px solid #2c2c2e;border-radius:8px;
-  color:#f5f5f7;font-size:13px;padding:9px 11px;outline:none;width:100%;transition:all .12s;
-}
-.asm-field input:focus{border-color:rgba(48,209,88,.45);box-shadow:0 0 0 3px rgba(48,209,88,.1)}
-.asm-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
-.btn-confirm{
-  background:linear-gradient(135deg,#30d158,#25a244);color:#000;
-  border:none;border-radius:8px;padding:9px 22px;
-  font-weight:700;font-size:12px;cursor:pointer;transition:filter .15s;
-}
-.btn-confirm:hover{filter:brightness(1.08)}
-.btn-cancel{
-  background:#1c1c1e;border:1px solid #2c2c2e;color:#8e8e93;
-  border-radius:8px;padding:9px 18px;font-size:12px;cursor:pointer;transition:all .12s;
-}
-.btn-cancel:hover{border-color:#636366;color:#f5f5f7}
-
-/* Import modal */
-#dropZone{
-  border:2px dashed #2c2c2e;border-radius:12px;padding:32px 20px;
-  text-align:center;cursor:pointer;transition:all .18s;background:#0a0a0a;margin-bottom:14px;
-}
-#dropZone:hover,#dropZone.dz-over{border-color:#30d158;background:rgba(48,209,88,.04)}
-.dz-icon{font-size:32px;margin-bottom:10px}
-.dz-title{font-weight:700;font-size:14px;color:#f5f5f7;letter-spacing:-.2px}
-.dz-sub{color:#636366;font-size:11px;margin-top:6px}
-#importStatus{
-  background:rgba(48,209,88,.07);border:1px solid rgba(48,209,88,.2);
-  border-radius:8px;padding:10px 13px;font-size:11px;color:#30d158;
-  margin-top:12px;display:none;font-family:ui-monospace,monospace;line-height:1.7;
-}
-
-/* Share modal */
-.share-row{display:flex;gap:8px;margin:10px 0}
-.share-url{
-  flex:1;background:#0a0a0a;border:1px solid #2c2c2e;border-radius:6px;
-  color:#636366;font-family:ui-monospace,monospace;font-size:10px;padding:9px 11px;outline:none;
-}
-.share-copy{
-  background:#30d158;color:#000;border:none;border-radius:6px;
-  padding:0 16px;font-weight:700;cursor:pointer;font-size:11px;white-space:nowrap;
-}
-.share-copy:hover{filter:brightness(1.1)}
-.share-option{
-  background:#0d0d0d;border:1px solid #1c1c1e;border-radius:10px;
-  padding:14px;margin-bottom:10px;cursor:pointer;transition:border-color .15s;
-}
-.share-option:hover{border-color:rgba(48,209,88,.35)}
-.so-title{font-weight:700;font-size:12px;margin-bottom:5px;color:#f5f5f7;letter-spacing:-.1px}
-.so-desc{color:#636366;font-size:10px;line-height:1.65}
-.share-platform{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
-.sp-btn{
-  background:#111;border:1px solid #1c1c1e;border-radius:7px;
-  padding:7px 15px;font-size:11px;cursor:pointer;color:#8e8e93;
-  transition:all .12s;font-family:inherit;
-}
-.sp-btn:hover{border-color:rgba(48,209,88,.35);color:#f5f5f7}
-
-/* STATUS BAR */
-#sbar{
-  border-top:1px solid #111;padding:4px 16px;display:flex;
-  align-items:center;gap:8px;font-family:ui-monospace,monospace;
-  font-size:8.5px;color:#3a3a3c;background:#0a0a0a;flex-shrink:0;
-}
-#sd{
-  width:5px;height:5px;border-radius:50%;background:#30d158;
-  box-shadow:0 0 5px rgba(48,209,88,.6);flex-shrink:0;
-  animation:pulse 2.5s ease-in-out infinite;
-}
-
-</style>
-<!-- Global IFRS / ISA reference overlay -->
-<div id="globalKBOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.96);backdrop-filter:blur(16px);flex-direction:column;">
-  <div id="globalKBHeader" style="display:flex;align-items:center;gap:12px;padding:14px 24px;background:#0a0a0a;border-bottom:1px solid #1c1c1e;flex-shrink:0;flex-wrap:wrap;row-gap:10px;">
-    <div style="display:flex;gap:6px;flex-shrink:0;">
-      <button id="gkb-tab-ifrs" class="gkb-tab act" onclick="switchGKB('ifrs')">📚 IFRS Reference</button>
-      <button id="gkb-tab-isa"  class="gkb-tab"     onclick="switchGKB('isa')">🔬 ISA Reference</button>
-    </div>
-    <div style="flex:1;position:relative;min-width:260px;max-width:680px;">
-      <input id="gkb-main-input" type="text"
-        placeholder="Ask anything — ECL stage 2, ISA 315 changes, provision criteria, goodwill impairment..."
-        style="width:100%;box-sizing:border-box;background:#1c1c1e;border:1.5px solid #3a3a3c;border-radius:10px;color:#f5f5f7;font-size:13px;padding:10px 44px 10px 14px;outline:none;font-family:inherit;transition:border-color .2s"
-        oninput="gkbLiveSearch()"
-        onkeydown="if(event.key==='Enter'){gkbHideAutocomplete();gkbAIAnswer();}"
-        onfocus="this.style.borderColor='#7c3aed';gkbShowAutocomplete(this)"
-        onblur="this.style.borderColor='#3a3a3c';gkbHideAutocomplete()">
-      <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none">🔍</span>
-      <div id="gkb-autocomplete" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#1c1c1e;border:1px solid #3a3a3c;border-radius:10px;z-index:10000;box-shadow:0 8px 32px rgba(0,0,0,.7);max-height:280px;overflow-y:auto"></div>
-    </div>
-    <button onclick="gkbHideAutocomplete();gkbAIAnswer()" style="background:linear-gradient(135deg,#7c3aed,#c850f0);color:#fff;border:none;border-radius:10px;padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">⚡ AI Answer</button>
-    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-      <span style="font-size:10px;color:#636366;background:#1c1c1e;border:1px solid #2c2c2e;border-radius:6px;padding:3px 7px">Ctrl+K</span>
-      <button onclick="closeGlobalKB()" style="background:#1c1c1e;border:1px solid #3a3a3c;color:#aeaeb2;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px">✕ Close</button>
-    </div>
-  </div>
-  <div id="globalKBFilters" style="padding:8px 24px;background:#060606;border-bottom:1px solid #1c1c1e;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0"></div>
-  <div id="globalKBBody" style="flex:1;overflow-y:auto;padding:20px 24px"></div>
-</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
+
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -6572,10 +6406,84 @@ var CONCEPT_MAP = {
 };
 
 /* ── TOKENIZER ──────────────────────────────────────────────────────────── */
+/* ── Synonym expansion map for search ── */
+var SYNONYM_MAP = {
+  'leaseback': ['lease back','sale leaseback','slb'],
+  'lease back': ['leaseback','sale leaseback','slb'],
+  'slb': ['sale and leaseback','leaseback'],
+  'ecl': ['expected credit loss','credit impairment','loan loss'],
+  'expected credit loss': ['ecl','loan loss provision','credit loss'],
+  'rou': ['right of use','right-of-use','rouasset'],
+  'right of use': ['rou','rouasset','lease asset'],
+  'ibr': ['incremental borrowing rate','discount rate lease'],
+  'goodwill': ['gw','business combination premium','excess purchase price'],
+  'impairment': ['write down','write-down','ias36','recoverable amount'],
+  'ifrs16': ['ifrs 16','lease standard','lessee accounting'],
+  'ifrs9': ['ifrs 9','ecl','financial instruments','credit loss'],
+  'ifrs15': ['ifrs 15','revenue recognition','performance obligation'],
+  'ifrs3': ['ifrs 3','business combination','acquisition accounting'],
+  'ias36': ['ias 36','impairment test','value in use','viu'],
+  'ias19': ['ias 19','pension','defined benefit','dbo'],
+  'ias37': ['ias 37','provision','contingent liability'],
+  'ias16': ['ias 16','ppe','depreciation','property plant equipment'],
+  'isa315': ['isa 315','risk assessment','rmm','inherent risk'],
+  'isa240': ['isa 240','fraud','misappropriation','management override'],
+  'isa570': ['isa 570','going concern','viability'],
+  'isa701': ['isa 701','key audit matters','kam'],
+  'isa600': ['isa 600','group audit','component auditor'],
+  'modification': ['modify','modified lease','loan modification','amendment'],
+  'reassessment': ['reassess','re-evaluate','lease reassessment'],
+  'derecognition': ['derecognise','remove from balance sheet','extinguish'],
+  'sicr': ['significant increase credit risk','stage 2 trigger','staging'],
+  'nopat': ['net operating profit after tax','after tax operating profit'],
+  'fcff': ['free cash flow','fcf','unlevered cash flow'],
+  'wacc': ['weighted average cost of capital','discount rate dcf'],
+  'terminal value': ['tv','gordon growth','perpetuity value','continuing value'],
+  'puc': ['projected unit credit','actuarial method'],
+  'fvtoci': ['fair value through oci','fair value other comprehensive income'],
+  'fvtpl': ['fair value through profit and loss','trading book'],
+  'provision': ['ias37 provision','contingent liability','warranty provision'],
+  'viu': ['value in use','ias36 viu','discounted cash flows impairment'],
+  'fvlcod': ['fair value less costs of disposal','net realisable value asset'],
+  'csm': ['contractual service margin','ifrs17 csm','insurance margin'],
+  'ppa': ['purchase price allocation','fair value uplift','acquisition fair value'],
+  'deferred tax': ['ias12','dta','dtl','temporary difference'],
+  'hedge': ['hedging','hedge accounting','fair value hedge','cash flow hedge'],
+  'variable consideration': ['ifrs15 variable','volume discount','rebate','constraint'],
+  'performance obligation': ['po','ifrs15 po','distinct good service'],
+  'contract asset': ['ifrs15 asset','unbilled revenue','accrued revenue'],
+  'sale and leaseback': ['slb','sell and leaseback','asset sale lease','sale leaseback ifrs16'],
+  'sell and leaseback': ['sale and leaseback','slb','asset monetisation'],
+};
+
+function _expandQuery(query) {
+  var q = query.toLowerCase().trim();
+  var expanded = [q];
+  /* Add synonyms for any matched phrase */
+  Object.keys(SYNONYM_MAP).forEach(function(key) {
+    if (q.indexOf(key) >= 0) {
+      SYNONYM_MAP[key].forEach(function(syn) {
+        if (expanded.indexOf(syn) < 0) expanded.push(syn);
+      });
+    }
+    /* Also reverse: if query contains a synonym, add the key */
+    SYNONYM_MAP[key].forEach(function(syn) {
+      if (q.indexOf(syn) >= 0 && expanded.indexOf(key) < 0) expanded.push(key);
+    });
+  });
+  /* Also add compound word variants: "leaseback" ↔ "lease back" */
+  var noSpaces = q.replace(/\s+/g, '');
+  if (noSpaces !== q && expanded.indexOf(noSpaces) < 0) expanded.push(noSpaces);
+  var withSpaces = q.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+  if (withSpaces !== q && expanded.indexOf(withSpaces) < 0) expanded.push(withSpaces);
+  return expanded;
+}
+
 function _tokenize(text) {
   return (text||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/)
     .filter(function(t){return t.length>1 && !STOP.has(t);});
 }
+
 
 /* ── FUZZY MATCH (Levenshtein distance for typo tolerance) ─────────────── */
 function _fuzzyScore(a,b){
@@ -6595,34 +6503,79 @@ function _fuzzyScore(a,b){
 
 /* ── SCORING ENGINE ─────────────────────────────────────────────────────── */
 function _scoreEntry(entry, terms, fields){
-  var score=0;
-  var stdLower=(entry.std||'').toLowerCase();
-  terms.forEach(function(term){
-    var t=term.toLowerCase();
-    // Standard number direct match
-    if(stdLower===t||stdLower.replace(/\s/g,'')===t.replace(/\s/g,'')){score+=300;return;}
-    if(stdLower.indexOf(t)>=0&&t.length>2){score+=150;}
-    fields.forEach(function(f){
-      if(f==='std')return;
-      var val=(Array.isArray(entry[f])?entry[f].join(' '):entry[f]||'').toLowerCase();
-      if(!val)return;
-      var idx=val.indexOf(t);
-      if(idx>=0){
-        var w=f==='keywords'?30:f==='title'?20:f==='topic'?12:f==='summary'?8:f==='problem'?6:f==='solution'?6:f==='auditor'?4:f==='example'?4:3;
-        score+=w;
-        var re=new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
-        score+=(((val.match(re)||[]).length-1)*w*0.2);
-      } else {
-        // Fuzzy match for typos
-        var words=val.split(/\s+/);
-        var best=0;
-        words.forEach(function(w2){if(w2.length>3){var fs=_fuzzyScore(t,w2);if(fs>0.7)best=Math.max(best,fs);}});
-        if(best>0.7)score+=3*best;
-      }
-    });
+  var score = 0;
+  var stdLower = (entry.std||'').toLowerCase();
+  var allText = [
+    entry.std||'', entry.title||'', entry.topic||'',
+    entry.summary||'', entry.problem||'', entry.solution||'',
+    entry.auditor||'', entry.example||'',
+    Array.isArray(entry.keywords) ? entry.keywords.join(' ') : (entry.keywords||'')
+  ].join(' ').toLowerCase();
+
+  /* Expand terms with synonyms if SYNONYM_MAP is available */
+  var expandedTerms = [];
+  terms.forEach(function(t){
+    expandedTerms.push(t);
+    if(typeof SYNONYM_MAP !== 'undefined'){
+      var syns = SYNONYM_MAP[t.toLowerCase()]||[];
+      syns.forEach(function(s){ if(expandedTerms.indexOf(s)<0) expandedTerms.push(s); });
+    }
   });
+
+  expandedTerms.forEach(function(term){
+    var t = term.toLowerCase();
+    if(!t || t.length < 2) return;
+
+    /* 1. Standard code exact match → very high score */
+    if(stdLower === t || stdLower.replace(/\s/g,'') === t.replace(/\s/g,'')){
+      score += 300; return;
+    }
+    if(stdLower.indexOf(t) >= 0 && t.length > 2){ score += 150; }
+
+    /* 2. Field-weighted scoring */
+    var weights = {
+      keywords: 35, title: 25, topic: 15,
+      summary: 10, problem: 8, solution: 8,
+      auditor: 6, example: 5
+    };
+    fields.forEach(function(f){
+      var fv = (entry[f]||'').toLowerCase();
+      if(!fv) return;
+      var w = weights[f] || 5;
+      /* Exact phrase in field */
+      if(fv.indexOf(t) >= 0){ score += w * (t.length > 6 ? 2 : 1); }
+      /* Token match in field */
+      var fToks = fv.replace(/[^a-z0-9\s]/g,' ').split(/\s+/);
+      fToks.forEach(function(ft){
+        if(ft.length > 2 && ft.indexOf(t) >= 0 && t.length >= 3){ score += Math.floor(w/2); }
+      });
+    });
+
+    /* 3. Keyword array special handling */
+    var _kws = Array.isArray(entry.keywords) ? entry.keywords : (entry.keywords ? [entry.keywords] : []); _kws.forEach(function(kw){
+      var k = kw.toLowerCase();
+      if(k === t){ score += 40; }
+      else if(k.indexOf(t) >= 0 || t.indexOf(k) >= 0){ score += 20; }
+    });
+
+    /* 4. Full text fuzzy — catch split compound words */
+    var noSpaceT = t.replace(/\s/g,'');
+    var noSpaceAll = allText.replace(/\s/g,'');
+    if(noSpaceAll.indexOf(noSpaceT) >= 0 && t.length > 5){ score += 15; }
+  });
+
+  /* 5. Cross-standard bonus — if query mentions multiple standards */
+  if(terms.length >= 2){
+    var matchedStds = 0;
+    terms.forEach(function(t){
+      if(stdLower.indexOf(t.toLowerCase()) >= 0) matchedStds++;
+    });
+    if(matchedStds >= 2) score += 50;
+  }
+
   return score;
 }
+
 
 function _conceptBoost(query,kb){
   var qLower=query.toLowerCase();
@@ -6636,24 +6589,52 @@ function _conceptBoost(query,kb){
 }
 
 function _findQAMatch(query,type){
-  var qLower=query.toLowerCase().trim();
-  var pairs=QA_PAIRS[type]||[];
-  var bestScore=0,bestPair=null;
+  var qRaw = query.toLowerCase().trim();
+  var expandedQueries = _expandQuery(qRaw);
+  var pairs = QA_PAIRS[type]||[];
+  var bestScore = 0, bestPair = null;
+
   pairs.forEach(function(pair){
     pair.q.forEach(function(pattern){
-      var pLower=pattern.toLowerCase();
-      if(qLower.indexOf(pLower)>=0||pLower.indexOf(qLower)>=0){
-        var sc=pLower.length+(pLower===qLower?100:0);
-        if(sc>bestScore){bestScore=sc;bestPair=pair;}
-      }
-      var pTok=_tokenize(pLower),qTok=_tokenize(qLower);
-      var overlap=pTok.filter(function(t){return qTok.indexOf(t)>=0;}).length;
-      var sc2=overlap*12+(overlap===pTok.length&&pTok.length>0?60:0)+(overlap>=pTok.length*0.7&&pTok.length>2?30:0);
-      if(sc2>bestScore){bestScore=sc2;bestPair=pair;}
+      var pLower = pattern.toLowerCase();
+      var pToks = _tokenize(pLower);
+      
+      /* Test every expanded query variant */
+      expandedQueries.forEach(function(qVar){
+        var qToks = _tokenize(qVar);
+        
+        /* Exact match bonus */
+        if(qVar === pLower || qVar.indexOf(pLower) >= 0 || pLower.indexOf(qVar) >= 0){
+          var sc = pLower.length * 3 + (pLower === qVar ? 200 : 50);
+          if(sc > bestScore){ bestScore=sc; bestPair=pair; }
+        }
+        
+        /* Token overlap scoring */
+        if(pToks.length > 0 && qToks.length > 0){
+          var overlap = pToks.filter(function(t){ return qToks.indexOf(t) >= 0; }).length;
+          var coverage = overlap / pToks.length; // how much of the pattern is covered
+          var recall   = overlap / qToks.length; // how much of the query is explained
+          var sc2 = overlap * 20
+            + (coverage >= 1.0 ? 100 : coverage >= 0.8 ? 60 : coverage >= 0.6 ? 30 : 0)
+            + (recall >= 0.8 ? 40 : recall >= 0.5 ? 20 : 0);
+          if(sc2 > bestScore){ bestScore=sc2; bestPair=pair; }
+        }
+        
+        /* Substring match on each token of query vs pattern */
+        qToks.forEach(function(qt){
+          if(pLower.indexOf(qt) >= 0 && qt.length >= 4){
+            var sc3 = qt.length * 5;
+            if(sc3 > bestScore){ bestScore=sc3; bestPair=pair; }
+          }
+        });
+      });
     });
   });
-  return bestScore>=18?bestPair:null;
+  
+  /* Threshold: 18 = at least a meaningful match */
+  return bestScore >= 18 ? bestPair : null;
 }
+
 
 /* ── AUTOCOMPLETE ENGINE ────────────────────────────────────────────────── */
 function _getAutocomplete(query){
@@ -7462,6 +7443,14 @@ National Grid: £40bn+ of regulated network assets. Revaluation model for transm
   answer:"## Audit Risk Model: Inherent Risk vs Control Risk vs Detection Risk\n\n### The Audit Risk Equation:\n**AR = IR x CR x DR**\nwhere AR = audit risk (acceptable level, e.g. 5%), IR = inherent risk, CR = control risk, DR = detection risk\n\n**Auditor's goal**: set DR to achieve target AR given assessed IR and CR.\n\n### Definitions:\n| Risk | Definition | Who controls it? | ISA reference |\n|---|---|---|---|\n| **Inherent Risk** | Risk of material misstatement BEFORE any controls | Management/nature of business | ISA 315.13 |\n| **Control Risk** | Risk that controls FAIL to prevent/detect MM | Management | ISA 315.16 |\n| **Detection Risk** | Risk that auditor FAILS to detect existing MM | Auditor | ISA 330.3 |\n| **RMM** | IR x CR (combined) | Management | ISA 315.13 |\n\n### ISA 315 Revised (2019) — New Two-Dimensional Model:\n- **OLD**: IR and CR assessed separately -> combined RMM\n- **NEW**: Assess IR using 5 Inherent Risk Factors (complexity, subjectivity, change, uncertainty, susceptibility) on a SPECTRUM (not just high/medium/low)\n- Position on spectrum drives NATURE and EXTENT of audit response (ISA 330)\n\n### Practical Impact:\nHigh IR + Weak controls = High RMM -> low DR needed -> more/better audit work\nLow IR + Strong controls = Low RMM -> higher DR acceptable -> less extensive testing\n\n---\n\n### Big 4 Practice:\nAll Big 4 firms restructured risk matrices after ISA 315 revision. PwC's Aura and KPMG's Clara platforms now show two-dimensional risk grids (IR factor score + CR assessment) per assertion, not just a combined RMM rating.",
 }
 
+,
+{
+  std:'IFRS 16', topic:'Leases',
+  q:['sale and leaseback','sale leaseback','sale-leaseback','slb accounting','sell and leaseback','sell and lease back','sale lease back','slb ifrs','leaseback ifrs 16','sale leaseback treatment','sale leaseback gain loss','sale leaseback rou','ifrs 16 sale','leaseback accounting','sale and lease','asset monetisation leaseback','sale and leaseback ifrs 15','derive sale leaseback','derivation leaseback',
+     'sale and leaseback ifrs 16','sale leaseback summary','sale leaseback treatment',
+     'sale leaseback gain','sale leaseback right of use','sale leaseback asset'],
+  answer:"## IFRS 16: Sale and Leaseback Accounting\n\nA **sale and leaseback** is a transaction where an entity sells an asset and immediately leases it back. IFRS 16 and IFRS 15 work together to determine accounting.\n\n### Step 1: Is the Transfer a Sale? (IFRS 15 Test)\nApply IFRS 15.5-step model: has control transferred to the buyer?\n- **YES** = sale → sale and leaseback accounting\n- **NO** = financing arrangement (no sale recognised)\n\n### Step 2a: If it IS a Sale (IFRS 16.98-103)\n\n**Seller-Lessee** recognises:\n- **ROU asset** = original carrying amount × (LL / FV)\n- **Gain/Loss** = ONLY the portion relating to the RETAINED rights (i.e., **leaseback portion is excluded from gain**)\n\n**Formula for Gain/Loss:**\n```\nGain recognised = Total gain × (FV - PV of lease payments) / FV\n                = Gain × proportion sold away\n```\n\n**Example:**\nBuilding: CA = $8M, FV = $10M → Total gain = $2M\nSold for $10M, leaseback PV = $4M, FV = $10M\n- ROU asset = $8M × ($4M / $10M) = **$3.2M**\n- Lease liability = $4M\n- Gain recognised = $2M × ($10M − $4M) / $10M = **$1.2M** (in P&L)\n- Deferred gain = $2M × $4M / $10M = **$0.8M** (reduces ROU asset or LL)\n\n**Buyer-Lessor** treats the asset as a purchase and the leaseback as a new lease (apply IFRS 16/IAS 17 lessor guidance).\n\n### Step 2b: If it is NOT a Sale (Financing)\n- Seller-lessee: continue to recognise asset; recognise financial liability for proceeds\n- Buyer-lessor: recognise financial asset (do not recognise the underlying asset)\n- No derecognition of the asset by the seller\n\n### Key Indicators — NOT a Sale:\n- Seller has repurchase option at fixed price or fair value (IFRS 15.B64-B76)\n- Leaseback terms are off-market (below-market rent = seller paid upfront)\n- Buyer has put option forcing seller to repurchase\n\n### IFRS 16 Interaction Summary:\n| Scenario | Asset | Gain/Loss | ROU Asset | Lease Liability |\n|---|---|---|---|---|\n| Sale (at FV) | Derecognised | Partial (retained rights excluded) | Recognised | Recognised |\n| Sale (below FV) | Derecognised | Adjusted for off-market terms | Recognised | Recognised |\n| Not a sale | Kept on B/S | None | Not recognised | Financial liability |\n\n---\n### Big 4 Example: British Airways / Deloitte\nBA regularly uses sale-and-leaseback for aircraft. Deloitte audit key matter: (1) test whether IFRS 15 control transfer criteria met (off-market lease terms can indicate no true sale); (2) verify gain calculation — BA can only recognise gain on the portion of the asset effectively sold (rights transferred to lessor); (3) assess sale price vs independent valuation to identify below-market terms requiring adjustment under IFRS 16.100."
+}
 ],
 
 /* ═══════════════════════════════════════════════════════════════════════ */
@@ -9809,6 +9798,28 @@ function initKBTab(type) {
   else renderISASearch();
 }
 
+
 </script>
+
+<div id="globalKBOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);flex-direction:column;">
+  <div id="globalKBHeader" style="display:flex;align-items:center;gap:12px;padding:14px 24px;background:#0d0d0d;border-bottom:1px solid #2c2c2e;flex-shrink:0;">
+    <div style="display:flex;gap:6px;">
+      <button id="gkb-tab-ifrs" class="gkb-tab act" onclick="switchGKB('ifrs')">📚 IFRS Reference</button>
+      <button id="gkb-tab-isa"  class="gkb-tab"     onclick="switchGKB('isa')">🔬 ISA Reference</button>
+    </div>
+    <div style="flex:1;position:relative;max-width:600px;">
+      <input id="gkb-main-input" type="text" placeholder="Ask anything — ECL stage 2, ISA 315 changes, provision criteria, goodwill impairment..."
+        style="width:100%;box-sizing:border-box;background:#1c1c1e;border:1.5px solid #3a3a3c;border-radius:10px;color:#f5f5f7;font-size:13px;padding:9px 44px 9px 14px;outline:none;font-family:inherit;"
+        oninput="gkbLiveSearch()" onkeydown="if(event.key==='Enter'){gkbAIAnswer();}else if(event.key==='Escape'){closeGlobalKB();}">
+      <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none;">🔍</span>
+    </div>
+    <button onclick="gkbAIAnswer()" style="background:linear-gradient(135deg,#7c3aed,#c850f0);color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">⚡ AI Answer</button>
+    <span style="color:#636366;font-size:11px;flex-shrink:0;">Ctrl+K</span>
+    <button onclick="closeGlobalKB()" style="background:#1c1c1e;border:1px solid #3a3a3c;color:#aeaeb2;border-radius:8px;padding:8px 14px;cursor:pointer;font-size:12px;margin-left:auto;flex-shrink:0;">✕ Close</button>
+  </div>
+  <div id="globalKBFilters" style="padding:8px 24px;background:#080808;border-bottom:1px solid #1c1c1e;display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;overflow-x:auto;"></div>
+  <div id="globalKBBody" style="flex:1;overflow-y:auto;padding:20px 24px;"></div>
+</div>
+
 </body>
 </html>
