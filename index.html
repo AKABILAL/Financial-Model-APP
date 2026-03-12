@@ -36,37 +36,42 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
   flex-shrink:0;gap:12px;
 }
 #logo{
-  font-weight:400;font-size:15px;display:flex;align-items:center;
-  gap:0;letter-spacing:-.2px;white-space:nowrap;color:#fff;
-  font-family:'Open Sans','Helvetica Neue',Arial,sans-serif;
+  font-weight:700;font-size:14px;display:flex;align-items:center;
+  gap:6px;letter-spacing:-.3px;white-space:nowrap;color:#fff;
 }
 #ldot{
   width:7px;height:7px;border-radius:50%;flex-shrink:0;
   background:#86BC25;
-  margin-left:1px;
-  align-self:flex-end;
-  margin-bottom:2px;
+  align-self:flex-end;margin-bottom:3px;margin-left:1px;
+  box-shadow:none;animation:none;
 }
-@keyframes pulseLogo{}
 #logo-ft{
-  font-size:15px;font-weight:700;letter-spacing:-.2px;
-  color:#86BC25;
-  font-family:'Open Sans','Helvetica Neue',Arial,sans-serif;
-  -webkit-text-fill-color:#86BC25;
+  font-size:14px;font-weight:700;letter-spacing:-.2px;
+  color:#86BC25;-webkit-text-fill-color:#86BC25;
+  background:none;font-style:normal;
 }
 #logo-ub{
-  font-size:15px;font-weight:700;letter-spacing:-.2px;
-  color:#86BC25;
-  -webkit-text-fill-color:#86BC25;
-  font-style:normal;
-  font-family:'Open Sans','Helvetica Neue',Arial,sans-serif;
+  font-size:14px;font-weight:700;letter-spacing:-.2px;
+  color:#86BC25;-webkit-text-fill-color:#86BC25;
+  background:none;font-style:normal;
 }
-#logo-by{font-size:15px;color:#fff;font-weight:400;margin-left:8px;font-family:'Open Sans','Helvetica Neue',Arial,sans-serif;}
+#logo-by{font-size:13px;color:#fff;font-weight:400;margin-left:8px;}
 #logo-by strong{color:#fff;font-weight:700;}
 #badge{
-  font-size:9px;color:#636366;border:1px solid #2c2c2e;
-  padding:3px 10px;border-radius:12px;font-family:ui-monospace,monospace;
-  white-space:nowrap;letter-spacing:.4px;
+  display:flex;align-items:center;gap:0;
+  font-size:9px;font-family:ui-monospace,monospace;
+  letter-spacing:.3px;white-space:nowrap;overflow:hidden;border-radius:8px;
+  border:1px solid #2a2a2a;background:#111;
+}
+#badge-main{
+  background:linear-gradient(90deg,#86BC25,#5a9e00);
+  color:#000;font-weight:900;font-size:9px;
+  padding:4px 10px;letter-spacing:.6px;text-transform:uppercase;
+}
+#badge-pipe{width:1px;height:100%;background:#2a2a2a}
+#badge-sub{
+  color:#f5f5f7;font-weight:700;font-size:9px;
+  padding:4px 10px;letter-spacing:.3px;background:#111;
 }
 #hdrBtns{display:flex;gap:6px;align-items:center}
 .hbtn{
@@ -546,10 +551,12 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
 
 <div id="hdr">
   <div id="logo">
-  <span id="logo-ft">FinTech </span><span id="logo-ub">Übermensch</span><div id="ldot"></div>
-  <span id="logo-by">by <strong>Bilal</strong></span>
+  <div id="ldot"></div>
+  <span id="logo-ft">FinTech</span>
+  <span id="logo-ub">Übermensch</span>
+  <span id="logo-by" style="color:#f5f5f7;font-weight:800;font-size:14px">by <strong>Bilal</strong></span>
 </div>
-  <div id="badge">Big 4 · IFRS/IAS · Live Calc · Dashboard · Formula Drill-Down</div>
+  <div id="badge"><span id="badge-main">Big 4-Grade IFRS/IAS</span><span id="badge-sub">Live Calc · Dashboard · Drill-Down · Excel</span></div>
   <div id="globalNav">
     <button class="gnav-btn" id="gnav-ifrs" onclick="openGlobalKB('ifrs')">📚 IFRS Reference</button>
     <button class="gnav-btn" id="gnav-isa"  onclick="openGlobalKB('isa')">🔬 ISA Reference</button>
@@ -909,29 +916,6 @@ function parseYrs(p){
 }
 function parseSY(p){
   var m=p.match(/20(\d\d)/i);return m?2000+parseInt(m[1]):new Date().getFullYear();
-}
-/* Parse a dollar/monetary amount from the prompt.
-   Handles: $10M, $10m, $10 million, $8,000,000, $8M, 10M, $10.5M, $500K, $500k etc.
-   Returns value in raw units (e.g. 10000000 for $10M), or null if not found. */
-function parseMoney(p){
-  var m;
-  m=p.match(/\$\s*([\d,]+(?:\.\d+)?)\s*[Mm](?:illion)?/);
-  if(m)return parseFloat(m[1].replace(/,/g,''))*1e6;
-  m=p.match(/\$\s*([\d,]+(?:\.\d+)?)\s*[Kk](?:illion)?/);
-  if(m)return parseFloat(m[1].replace(/,/g,''))*1e3;
-  m=p.match(/\$\s*([\d,]+(?:\.\d+)?)\b/);
-  if(m){var v=parseFloat(m[1].replace(/,/g,''));if(v>0)return v;}
-  m=p.match(/\b([\d,]+(?:\.\d+)?)\s*[Mm](?:illion)?\b/);
-  if(m)return parseFloat(m[1].replace(/,/g,''))*1e6;
-  return null;
-}
-/* Parse depreciation method: 1=StraightLine, 2=ReducingBalance, 3=MachineHours */
-function parseDeprMethod(p){
-  var pl=p.toLowerCase();
-  if(pl.match(/reducing.?bal|diminishing|declining.?bal/))return 2;
-  if(pl.match(/machine.?hour|units.?of.?prod/))return 3;
-  if(pl.match(/straight.?line|sl\b|linear/))return 1;
-  return null;
 }
 function yHdrs(n,sy){var h=['Line Item'];for(var i=0;i<n;i++)h.push('FY '+(sy+i));return h;}
 
@@ -1357,21 +1341,14 @@ function computeIFRS18(n,sy){
 ═══════════════════════════════════════════════════════════════════════ */
 function buildIAS16(p){
   var n=parseYrs(p), sy=parseSY(p);
-  /* ── Parse values directly from prompt so typed instructions take effect immediately ── */
-  var promptCost=parseMoney(p);          // e.g. "$10M" → 10000000
-  var promptMethod=parseDeprMethod(p);   // e.g. "straight line" → 1
-  /* Parse useful life explicitly (parseYrs already handles "7 years") */
-  var promptLife=(function(){var m=p.match(/(\d+)\s*(?:yr|year)/i);return m?Math.min(Math.max(parseInt(m[1]),1),20):null;})();
-  /* Parse residual value — look for "residual $Xk" or "salvage $X" patterns */
-  var promptResidual=(function(){var m=p.match(/(?:residual|salvage|scrap)[^$\d]*\$?\s*([\d,]+(?:\.\d+)?)\s*([MmKk]?)/);if(!m)return null;var v=parseFloat(m[1].replace(/,/g,''));if(m[2].toLowerCase()==='m')v*=1e6;else if(m[2].toLowerCase()==='k')v*=1e3;return v>0?v:null;})();
   freshASM({
-    assetCost:   {label:'Asset Cost (at acquisition)',          value:promptCost||8000000,  unit:'USD'},
-    residual:    {label:'Residual Value',                       value:promptResidual||400000,   unit:'USD'},
-    usefulLife:  {label:'Useful Life (Years)',                  value:promptLife||n,        unit:'yrs'},
+    assetCost:   {label:'Asset Cost (at acquisition)',          value:8000000,  unit:'USD'},
+    residual:    {label:'Residual Value',                       value:400000,   unit:'USD'},
+    usefulLife:  {label:'Useful Life (Years)',                  value:n,        unit:'yrs'},
     additionsY1: {label:'Annual Capital Additions',            value:200000,   unit:'USD'},
     borrowCost:  {label:'Borrowing Costs Capitalised (IAS 23)',value:0,        unit:'USD'},
     impairY3:    {label:'Impairment Loss (Year 3)',             value:0,        unit:'USD'},
-    deprMethod:  {label:'Method: 1=StraightLine 2=ReduceBal 3=MachineHours', value:promptMethod||1, unit:''},
+    deprMethod:  {label:'Method: 1=StraightLine 2=ReduceBal 3=MachineHours', value:1, unit:''},
     rbRate:      {label:'Reducing Balance Rate %',             value:40,       unit:'%'},
     totalHours:  {label:'Total Estimated Machine Hours (life)',value:50000,    unit:'hrs'},
     year1Hours:  {label:'Machine Hours — Year 1',              value:12000,    unit:'hrs'},
@@ -1855,9 +1832,8 @@ function computeIAS19(n,sy){
 ═══════════════════════════════════════════════════════════════════════ */
 function buildIAS36(p){
   var n=parseYrs(p), sy=parseSY(p);
-  var promptCost=parseMoney(p);
   freshASM({
-    carrying:   {label:'CGU Carrying Amount',           value:promptCost||65000000, unit:'USD'},
+    carrying:   {label:'CGU Carrying Amount',           value:65000000, unit:'USD'},
     rev1:       {label:'Revenue Year 1',                value:14000000, unit:'USD'},
     revGrowth:  {label:'Revenue Growth Rate',           value:5.0,      unit:'%'},
     ebitdaMgn:  {label:'EBITDA Margin %',               value:24.0,     unit:'%'},
@@ -2091,9 +2067,8 @@ function computeIAS12(n,sy){
 ═══════════════════════════════════════════════════════════════════════ */
 function buildIAS38(p){
   var n=parseYrs(p), sy=parseSY(p);
-  var promptCost=parseMoney(p);
   freshASM({
-    intangCost: {label:'Intangible Asset (Finite) Cost',value:promptCost||6000000, unit:'USD'},
+    intangCost: {label:'Intangible Asset (Finite) Cost',value:6000000, unit:'USD'},
     usefulLife: {label:'Useful Life (Years)',           value:n,       unit:'yrs'},
     devCapAnn:  {label:'Annual Dev. Costs Capitalised', value:800000,  unit:'USD'},
     researchExp:{label:'Annual Research Expense',       value:1200000, unit:'USD'},
@@ -3716,9 +3691,10 @@ function buildIFRS18_r(p){
 
 /* IAS16 recompute-aware wrapper */
 function buildIAS16_r(p){
-  /* Always run through buildIAS16 first to parse prompt values into ASM,
-     but preserve any values the user has manually edited via freshASM's save/restore. */
-  return buildIAS16(p);
+  var n=_getNfromASM(p,'usefulLife')||parseYrs(p);
+  var sy=_getSYfromASM(p);
+  if(!ASM.assetCost) return buildIAS16(p);
+  return computeIAS16(n,sy);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -3829,34 +3805,17 @@ function renderTable(d){
           if(M&&M.tableRows&&M.tableRows[_ri]&&Array.isArray(M.tableRows[_ri].values)){
             M.tableRows[_ri].values[_ci]=nv;
           }
-          /* ── BIDIRECTIONAL SYNC: update matching ASM key so Assumptions tab reflects change ── */
-          var rowLabel=_rowRef&&_rowRef.label?_rowRef.label.toLowerCase().trim():'';
-          var matched=false;
-          Object.keys(ASM).forEach(function(k){
-            if(matched)return;
-            var aLabel=(ASM[k].label||k).toLowerCase().trim();
-            if(rowLabel&&(aLabel===rowLabel||rowLabel.indexOf(aLabel)>-1||aLabel.indexOf(rowLabel)>-1)){
-              ASM[k].value=nv; matched=true;
-            }
-          });
-          if(!matched){
-            var oldV=_rowRef&&Array.isArray(_rowRef.values)?parseFloat(_rowRef.values[_ci]):NaN;
-            if(!isNaN(oldV)&&oldV!==0){
-              Object.keys(ASM).forEach(function(k){
-                if(matched)return;
-                var av=parseFloat(ASM[k].value);
-                if(!isNaN(av)&&Math.abs(av-oldV)/Math.abs(oldV)<0.001){ASM[k].value=nv;matched=true;}
-              });
-            }
+          /* For income-statement type models: re-sum totals after cell edit */
+          if(M&&(M.ifrsStandard==='DCF / Valuation'||M.ifrsStandard==='IFRS 18'||
+             M.ifrsStandard==='IAS 12'||M.ifrsStandard==='IAS 2'||
+             M.ifrsStandard==='IFRS 15'||M.ifrsStandard==='IFRS 7')){
+            _recomputeModelTotals();
+            renderTable(M);
+            setTimeout(function(){
+              var edited=document.querySelector('.cv[data-ri="'+_ri+'"][data-ci="'+_ci+'"]');
+              if(edited){edited.style.color=nv<0?'#ff453a':'#ffd60a';edited.style.borderBottom='1px solid #ffb840';}
+            },10);
           }
-          if(matched)renderAssumptions();
-          /* Re-sum totals for all model types after cell edit */
-          _recomputeModelTotals();
-          renderTable(M);
-          setTimeout(function(){
-            var edited=document.querySelector('.cv[data-ri="'+_ri+'"][data-ci="'+_ci+'"]');
-            if(edited){edited.style.color=nv<0?'#ff453a':'#ffd60a';edited.style.borderBottom='1px solid #ffb840';}
-          },10);
         }
         scheduleDashUpdate();
       };})(inp,ri,ci,row));
@@ -5721,68 +5680,76 @@ function _buildDefaultCards(type) {
 function kbSearch(type) {
   var inp = document.getElementById('kb-input-'+type);
   var raw = inp ? inp.value.trim() : '';
-  var query = typeof _cleanQueryNLP === 'function' ? _cleanQueryNLP(raw) : raw.toLowerCase();
-  /* Fix: tokenize query into array for _scoreEntry */
-  var queryTokens = typeof _tokenize === 'function' ? _tokenize(raw) : query.split(/\s+/).filter(Boolean);
-  
-  if(!query) {
-    // If inside a model, show filtered default; otherwise show all
+  if(!raw) {
     if(_isModelTab && _isModelTab()) {
-      var filter = _getModelStandards(type);
-      if(filter) { _renderModelFilteredKB(type, filter); return; }
+      var f0 = _getModelStandards(type);
+      if(f0) { _renderModelFilteredKB(type, f0); return; }
     }
     _buildDefaultCards(type);
     return;
   }
   _gkbType = type;
-  
-  // Model-inline search: only search within relevant standards
-  var modelFilter = null;
-  if(_isModelTab && _isModelTab()) {
-    modelFilter = _getModelStandards(type);
-  }
-  
-  // Try Q&A match first
-  var qa = _findQAMatch(raw, type);
   var kb = type==='ifrs' ? IFRS_KB : ISA_KB;
-  
-  // Score KB entries
-  var scored = kb.map(function(e) {
-    // If model-inline search: skip irrelevant standards
-    if(modelFilter) {
-      var stdName = e.std || '';
-      var relevant = modelFilter.some(function(s) {
-        return stdName.toUpperCase().indexOf(s.toUpperCase()) >= 0 ||
-               s.toUpperCase().indexOf(stdName.toUpperCase()) >= 0;
-      });
-      if(!relevant) return {e:e, score:-1};
-    }
-    return {e:e, score: typeof _scoreEntry === 'function' ? _scoreEntry(e, queryTokens, ['std','title','topic','summary','problem','solution','auditor','example','keywords']) : 0};
-  }).filter(function(x){return x.score > 0;}).sort(function(a,b){return b.score-a.score;});
-  
+  var accent = type==='ifrs' ? '#0076A8' : '#00A3E0';
   var container = document.getElementById('kb-results-'+type);
   if(!container) return;
   container.innerHTML = '';
-  
-  // Model filter banner
-  if(modelFilter) {
-    var banner = document.createElement('div');
-    banner.style.cssText = 'background:linear-gradient(90deg,#1a0a2e,#0a1420);border:1px solid #0076a844;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#00A3E0';
-    banner.innerHTML = '🔍 Searching within <b>' + (M?M.modelType||'model':'model') + '</b> standards only. <span style="color:#636366;cursor:pointer" onclick="_clearModelFilter(\''+type+'\')">Search all ↗</span>';
-    container.appendChild(banner);
+
+  /* --- Build rich token set ----------------------------------------- */
+  var tokens = _tokenize(raw);
+  /* Add synonym/expansion tokens */
+  var expanded = _expandQuery(raw);
+  expanded.forEach(function(eq){
+    _tokenize(eq).forEach(function(t){ if(tokens.indexOf(t)<0) tokens.push(t); });
+  });
+  /* Also tokenize each word individually (handles partial input) */
+  raw.toLowerCase().split(/\s+/).forEach(function(w){
+    var wc = w.replace(/[^a-z0-9]/g,'');
+    if(wc.length>1 && tokens.indexOf(wc)<0) tokens.push(wc);
+  });
+
+  var boosts = _conceptBoost(raw, kb);
+  var fields = ['std','title','topic','summary','problem','solution','auditor','example','keywords'];
+
+  /* --- Score ALL KB entries ----------------------------------------- */
+  var scored = kb.map(function(e){
+    var kw = Array.isArray(e.keywords) ? e.keywords.join(' ') : (e.keywords||'');
+    var e2 = Object.assign({},e,{keywords:kw});
+    var s = _scoreEntry(e2, tokens, fields);
+    s += (boosts[e.std]||0);
+    return {e:e, score:s};
+  }).filter(function(x){return x.score>0;}).sort(function(a,b){return b.score-a.score;});
+
+  /* --- Model-inline banner ------------------------------------------ */
+  if(_isModelTab && _isModelTab()) {
+    var mf = _getModelStandards(type);
+    if(mf) {
+      var bn = document.createElement('div');
+      bn.style.cssText = 'background:linear-gradient(90deg,#1a0a2e,#0a1420);border:1px solid #0076a844;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:11px;color:#00A3E0';
+      bn.innerHTML = '🔍 Showing results across full '+type.toUpperCase()+' library. <span style="color:#636366">(model filter lifted for search)</span>';
+      container.appendChild(bn);
+    }
   }
-  
-  var accent = type==='ifrs' ? '#0076A8' : '#00A3E0';
-  
-  if(qa) container.appendChild(_buildQAAnswerBox(qa, query, accent));
-  
-  if(scored.length === 0 && !qa) {
-    container.innerHTML += '<div style="padding:20px;text-align:center;color:#636366">No results for "' + raw + '"' + (modelFilter?' in this model\'s standards':'') + '</div>';
+
+  /* --- Q&A direct match --------------------------------------------- */
+  var qa = _findQAMatch(raw, type);
+  if(qa) container.appendChild(_buildQAAnswerBox(qa, raw, accent));
+
+  /* --- No results state --------------------------------------------- */
+  if(scored.length===0 && !qa) {
+    var noRes = document.createElement('div');
+    noRes.style.cssText = 'padding:24px 20px;text-align:center';
+    noRes.innerHTML = '<div style="font-size:28px;margin-bottom:8px">🔍</div>'
+      +'<div style="font-size:13px;font-weight:600;color:#aeaeb2;margin-bottom:6px">No results for "'+esc(raw)+'"</div>'
+      +'<div style="font-size:11px;margin-bottom:14px;color:#48484a">Try: "group auditor", "ECL stage 2", "finance lease vs operating", "going concern", "KAM"</div>'
+      +'<button onclick="kbAI(\''+type+'\')" style="background:linear-gradient(135deg,#7c3aed,#0076A8);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:11px;font-weight:700;cursor:pointer;">⚡ Ask AI about "'+esc(raw)+'"</button>';
+    container.appendChild(noRes);
     return;
   }
-  
-  scored.slice(0,10).forEach(function(x) {
-    container.appendChild(_buildResultCard(x.e, query, accent, null));
+
+  /* --- Render top results ------------------------------------------- */
+  scored.slice(0,10).forEach(function(x){
+    container.appendChild(_buildResultCard(x.e, raw, type));
   });
 }
 
@@ -5814,18 +5781,13 @@ function kbAI(type) {
   
   // Build context from top matching results
   var kb = type === 'ifrs' ? IFRS_KB : ISA_KB;
-  var terms = typeof _tokenize === 'function' ? _tokenize(query) : query.split(/\s+/).filter(Boolean);
-  var fields = ['std','title','topic','summary','problem','solution','example','auditor','keywords'];
-  /* Include concept boosts and keyword field in scoring */
-  var conceptBoosts = typeof _conceptBoost === 'function' ? _conceptBoost(query, kb) : {};
+  var terms = query.split(/\s+/).filter(Boolean);
+  var fields = ['std','title','topic','summary','problem','solution','example','auditor'];
   var scored = kb.map(function(e) {
-    var kw = Array.isArray(e.keywords) ? e.keywords.join(' ') : '';
-    var s = _scoreEntry(Object.assign({}, e, {keywords: kw}), terms, fields);
-    s += (conceptBoosts[e.std] || 0);
-    return { entry: e, score: s };
+    return { entry: e, score: _scoreEntry(e, terms, fields) };
   }).filter(function(x) { return x.score > 0; });
   scored.sort(function(a,b) { return b.score-a.score; });
-  var topMatches = scored.slice(0,8).map(function(x){return x.entry;});
+  var topMatches = scored.slice(0,5).map(function(x){return x.entry;});
   
   var context = topMatches.map(function(e) {
     return e.std+' — '+e.title+':\nSummary: '+e.summary+'\nProblem: '+e.problem+'\nSolution: '+e.solution+'\nExample: '+e.example+'\nAuditor: '+e.auditor;
@@ -5937,7 +5899,7 @@ function _renderModelFilteredKB(type, allowedStandards) {
     });
     if(relevant) {
       try {
-        var card = _buildResultCard(entry, null, type==='ifrs'?'#0076A8':'#00A3E0', null);
+        var card = _buildResultCard(entry, null, type);
         if(!card) return;
         if(typeof card === 'string') {
           var d2=document.createElement('div'); d2.innerHTML=card; container.appendChild(d2);
@@ -6458,13 +6420,14 @@ document.addEventListener('DOMContentLoaded',function(){
 .tb-isa{border-bottom:2px solid transparent!important;}
 .tb-isa.act{color:#6ee7b7!important;border-bottom-color:#10b981!important;background:rgba(16,185,129,.08)!important;}
 
-/* ── Logo Übermensch italics fix ─────────────────────── */
-#logo-ub{font-style:normal!important;}
+/* ── Logo Deloitte-style fix ─────────────────────── */
+#logo-ub{font-style:normal!important;color:#86BC25!important;-webkit-text-fill-color:#86BC25!important;background:none!important;}
+#logo-ft{color:#86BC25!important;-webkit-text-fill-color:#86BC25!important;background:none!important;}
+#ldot{background:#86BC25!important;box-shadow:none!important;animation:none!important;}
 
 /* ── Purple accent overrides for header ──────────────── */
 #hdr{background:linear-gradient(90deg,#0a0e18 0%,#0d1420 50%,#0a0e18 100%)!important;
   border-bottom:1px solid rgba(124,58,237,.3)!important;}
-#ldot{background:#86BC25!important;box-shadow:none!important;animation:none!important;}
 
 /* ── KB AI result ────────────────────────────────────── */
 #kb-ai-ifrs,#kb-ai-isa{animation:fadeIn .3s ease;}
@@ -6750,15 +6713,6 @@ var IFRS_KB = [
    auditor:'Obtain all correspondence with tax authorities. Challenge management\'s assessment of probability of detection and disallowance. Assess whether tax opinion supports "probable" threshold. Consider using tax specialist. Test that interest and penalties included in the provision where probable.',
    keywords:['uncertain tax','uncertain tax position','ifric 23','tax treatment','detection risk'],
    icon:'🔍',color:'#f59e0b'},
-
-  {std:'IFRS 7',title:'Finance Lease vs Operating Lease — Lessee and Lessor Classification',series:'A',topic:'Financial Instruments Disclosure',
-   summary:'IFRS 7 requires disclosure of financial risk management including liquidity risk. Under IFRS 16, ALL leases for lessees are on-balance-sheet — no operating vs finance distinction for lessees. Lessors retain the IAS 17-style classification: finance lease (risks and rewards transferred) vs operating lease (risks retained).',
-   problem:'What is the difference between operating and finance lease? How are they treated and disclosed under IFRS 7 and IFRS 16?',
-   solution:'LESSEE (IFRS 16): no classification needed — all leases recognised as ROU asset and lease liability. Short-term (<12 months) and low-value exemptions available. LESSOR classification: Finance lease — substantially all risks and rewards transferred (ownership transfer, bargain purchase, lease term = major part of asset life >75%, PV payments = substantially all fair value >90%). Operating lease — all other leases, asset remains on lessor balance sheet. IFRS 7 maturity disclosure: lease liabilities must be included in contractual undiscounted cash flow maturity table.',
-   example:'Lessee 5-year property lease: recognises ROU $500K + lease liability $480K regardless of old IAS 17 classification. Lessor — heavy equipment (5yr lease, PV of payments = 92% of asset FV): finance lease — derecognise asset $400K, recognise receivable $450K. Lessor — property rental month-to-month: operating lease — retain property on balance sheet, recognise rental income straight-line. IFRS 7 maturity: lessee shows undiscounted lease payments <1yr $120K, 1-5yr $380K.',
-   auditor:'For lessors: test finance vs operating classification rigorously — check all five IAS 17-derived indicators. For lessees: verify all leases recognised unless exemption applies; test IBR reasonableness; agree ROU and lease liability opening balances. IFRS 7: verify maturity table includes lease liabilities on undiscounted basis; check reconciliation to balance sheet carrying amount.',
-   keywords:['finance lease','operating lease','ifrs 7','ifrs 16','lease classification','lessee','lessor','rou asset','lease liability','maturity analysis','liquidity risk lease','risks and rewards','operating vs finance lease difference'],
-   icon:'\uD83C\uDFE2',color:'#0076A8',series:'A'}
 ];
 
 /* ── ISA KNOWLEDGE BASE ──────────────────────────────────────────────*/
@@ -6954,33 +6908,6 @@ var ISA_KB = [
    auditor:'Independence: required (IESBA Code). But no assurance conclusion — just facts. Distribution: only to specified parties (engaging party and named third parties). Not a general-purpose report. Users understand they draw their own conclusions. Procedures must be objective and verifiable.',
    keywords:['agreed upon procedures','aup','isrs 4400','factual findings','no assurance','specific procedures'],
    icon:'📋',color:'#8b5cf6',volume_name:'Other Assurance'},
-
-  {std:'ISA 600',title:'Special Considerations — Audits of Group Financial Statements',volume:1,topic:'Group Audits',
-   summary:'ISA 600 governs the group auditor (engagement partner) who takes responsibility for the group audit opinion. Requires the group auditor to understand the group, its components, and component auditors. Group auditor must obtain sufficient appropriate evidence from components whether audited by themselves or a component auditor.',
-   problem:'Group auditor relies on work of a component auditor in a foreign jurisdiction. What are the obligations?',
-   solution:'Group auditor must: (1) Evaluate competence and independence of component auditor; (2) Communicate with component auditor — provide group instructions covering scope, materiality, timelines, reporting requirements; (3) Review component auditor work; (4) Determine if significant component requiring full audit, limited procedures, or specific procedures; (5) Consolidate component findings; (6) Remain solely responsible for group opinion — cannot disclaim responsibility to component auditor.',
-   example:'Global manufacturing group: parent in UK, subsidiaries in Germany ($80M), China ($120M), Brazil ($40M). Group auditor designates China as significant component (>15% of group assets). Instructions sent: materiality $2M, key risks = revenue cut-off and inventory valuation, report by March 15. Group auditor reviews work papers and holds call to discuss findings before issuing group opinion.',
-   auditor:'Group instructions must include: identified significant risks at group level; component materiality (typically 50-75% of group materiality); list of related parties; required procedures; reporting deadlines. Document component auditor evaluation. If component auditor work is insufficient — perform additional procedures or modify group opinion. ISA 600.41: group auditor cannot refer to component auditor in group opinion to reduce responsibility.',
-   keywords:['group auditor','component auditor','isa 600','group audit','significant component','group instructions','component materiality','group engagement partner','overseas subsidiary','foreign component','group opinion'],
-   icon:'\uD83C\uDF10',color:'#3b82f6',volume_name:'Auditing'},
-
-  {std:'ISA 600',title:'Component Materiality and Significant Component Procedures',volume:1,topic:'Group Audits',
-   summary:'A significant component is one of individual financial significance to the group, or likely to include significant risks. Component materiality is always lower than group materiality — typically 50-75% of group performance materiality. Group engagement team must plan and perform procedures for all significant components.',
-   problem:'How does the group auditor set component materiality and determine scope for each component?',
-   solution:'Component materiality must be lower than group — aggregate misstatements from all components must not exceed group materiality. Significant components require full-scope audit or specific risk-focused procedures. Non-significant components: analytical procedures or limited scope. Group auditor must evaluate ALL components and document the determination including rationale.',
-   example:'Group materiality $5M, performance materiality $3.5M. Component A (40% of revenue, significant): component materiality $2M. Component B (8% of revenue): analytical procedures only. Component C (new acquisition): specific procedures on goodwill and fair values. All component misstatements aggregated and monitored against $5M group threshold.',
-   auditor:'Document for each component: significant/non-significant determination with rationale; type of work; component materiality applied; component auditor performing work; findings and communication to group team. Reassess if circumstances change mid-year.',
-   keywords:['component materiality','significant component','group materiality','isa 600','non-significant','aggregate materiality','component scope','group audit procedures','component auditor scope'],
-   icon:'\uD83D\uDCCA',color:'#3b82f6',volume_name:'Auditing'},
-
-  {std:'ISA 620',title:'Using the Work of an Auditor Expert',volume:1,topic:'Experts',
-   summary:'When using an expert (management or auditor own), the auditor must evaluate competence, capability, objectivity, and adequacy of work. Auditor remains solely responsible for the opinion — cannot delegate responsibility to the expert.',
-   problem:'Auditor uses a property valuation expert to assess fair value of investment properties. What procedures are required?',
-   solution:'Auditor must: (1) Evaluate expert professional competence and qualifications; (2) Assess objectivity and independence from management; (3) Agree scope of work in writing; (4) Evaluate adequacy of work — assumptions, methods, data, consistency with IFRS 13; (5) Assess if conclusions are reasonable and consistent with other evidence. If expert work is unsatisfactory — perform additional procedures or modify opinion.',
-   example:'IAS 40: management engages RICS-qualified surveyor. Auditor evaluates: credentials and experience; independence from management; methodology — DCF using market rental yields; assumptions — 6.5% yield vs market range 6-7% (reasonable); sensitivity: 0.5% yield change = +/-$3.2M (material). Auditor documents: expert work is adequate.',
-   auditor:'Distinguish management expert (e.g. actuary for IAS 19) from auditor own expert. Management expert: ISA 500 applies. Auditor own expert: ISA 620 — agree engagement terms, evaluate work, document. Common uses: valuations, actuarial calculations, engineering estimates, legal opinions, IT specialists.',
-   keywords:['auditor expert','isa 620','management expert','valuation expert','specialist','actuary','property valuation','expert evaluation','competence objectivity','auditor specialist'],
-   icon:'\uD83D\uDD2C',color:'#f59e0b',volume_name:'Auditing'},
 ];
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -7208,84 +7135,6 @@ var CONCEPT_MAP = {
   'soc 1':                              ['ISAE 3402'],
   'agreed upon procedures':             ['ISRS 4400'],
   'aup':                                ['ISRS 4400'],
-  // Group audit concepts
-  'group auditor':                      ['ISA 600'],
-  'group audit':                        ['ISA 600'],
-  'component auditor':                  ['ISA 600'],
-  'significant component':              ['ISA 600'],
-  'component materiality':              ['ISA 600'],
-  'group engagement partner':           ['ISA 600'],
-  'overseas subsidiary':                ['ISA 600','ISA 210'],
-  'foreign subsidiary':                 ['ISA 600'],
-  'group instructions':                 ['ISA 600'],
-  'isa 600':                            ['ISA 600'],
-  // Expert
-  'auditor expert':                     ['ISA 620'],
-  'management expert':                  ['ISA 620'],
-  'valuation specialist':               ['ISA 620'],
-  'isa 620':                            ['ISA 620'],
-  // Additional ISA concepts
-  'group financial statements':         ['ISA 600','IFRS 10'],
-  'group opinion':                      ['ISA 600'],
-  'network firm':                       ['ISA 600'],
-  'joint venture audit':                ['ISA 600'],
-  'reliance component auditor':         ['ISA 600'],
-  'sampling':                           ['ISA 530'],
-  'audit sampling':                     ['ISA 530'],
-  'isa 530':                            ['ISA 530'],
-  'written representations':            ['ISA 580'],
-  'management letter':                  ['ISA 580'],
-  'isa 580':                            ['ISA 580'],
-  'related party':                      ['ISA 550'],
-  'isa 550':                            ['ISA 550'],
-  'opening balances':                   ['ISA 510'],
-  'isa 510':                            ['ISA 510'],
-  'comparative':                        ['ISA 710'],
-  'isa 710':                            ['ISA 710'],
-  'emphasis of matter':                 ['ISA 706'],
-  'other matter':                       ['ISA 706'],
-  'isa 706':                            ['ISA 706'],
-  'communication deficiencies':         ['ISA 265'],
-  'significant deficiency':             ['ISA 265'],
-  'isa 265':                            ['ISA 265'],
-  // IFRS additional concept coverage
-  'finance lease':                      ['IFRS 16','IFRS 7'],
-  'operating lease':                    ['IFRS 16','IFRS 7'],
-  'finance vs operating':               ['IFRS 16','IFRS 7'],
-  'operating vs finance':               ['IFRS 16','IFRS 7'],
-  'lease classification':               ['IFRS 16','IFRS 7'],
-  'maturity analysis':                  ['IFRS 7'],
-  'undiscounted cash flows':            ['IFRS 7'],
-  'liquidity maturity':                 ['IFRS 7'],
-  'reclassification':                   ['IFRS 9','IFRS 5'],
-  'sale leaseback':                     ['IFRS 16','IAS 40'],
-  'investment property':                ['IAS 40'],
-  'ias 40':                             ['IAS 40'],
-  'hyperinflation':                     ['IAS 29'],
-  'ias 29':                             ['IAS 29'],
-  'earnings per share':                 ['IAS 33'],
-  'eps':                                ['IAS 33'],
-  'ias 33':                             ['IAS 33'],
-  'related parties':                    ['IAS 24'],
-  'ias 24':                             ['IAS 24'],
-  'segment':                            ['IFRS 8'],
-  'operating segment':                  ['IFRS 8'],
-  'borrowing costs':                    ['IAS 23'],
-  'ias 23':                             ['IAS 23'],
-  'government grants':                  ['IAS 20'],
-  'ias 20':                             ['IAS 20'],
-  'events after reporting period':      ['IAS 10'],
-  'ias 10':                             ['IAS 10'],
-  'construction contract':              ['IFRS 15','IAS 11'],
-  'contract revenue':                   ['IFRS 15'],
-  'presentation':                       ['IAS 1','IFRS 18'],
-  'other comprehensive income':         ['IAS 1'],
-  'oci':                                ['IAS 1','IAS 19','IFRS 9'],
-  'equity method':                      ['IAS 28'],
-  'associate':                          ['IAS 28'],
-  'ias 28':                             ['IAS 28'],
-  'joint arrangement':                  ['IFRS 11'],
-  'ifrs 11':                            ['IFRS 11'],
 };
 
 /* ── DIRECT Q&A PAIRS ─────────────────────────────────────────────────
@@ -7717,6 +7566,145 @@ Opening DBO: $50M | Opening Assets: $42M | Net Liability: $8M | Discount rate: 4
       std:'IFRS 3', topic:'Business Combinations',
       q:['difference between goodwill and bargain purchase','goodwill vs negative goodwill','bargain purchase gain','ifrs 3 goodwill vs bargain','badwill'],
       answer:'b>IFRS 3: Goodwill vs Bargain Purchase</b><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px"><tr style="background:#1a1a2e"><th style="padding:6px;border:1px solid #444;color:#a78bfa">Item</th><th style="padding:6px;border:1px solid #444;color:#a78bfa">When Arises</th><th style="padding:6px;border:1px solid #444;color:#a78bfa">Formula</th><th style="padding:6px;border:1px solid #444;color:#a78bfa">Treatment</th></tr><tr><td style="padding:5px;border:1px solid #333"><b>Goodwill</b></td><td style="padding:5px;border:1px solid #333">Consideration &gt; Fair value of net assets</td><td style="padding:5px;border:1px solid #333">Consideration + NCI − FVNA</td><td style="padding:5px;border:1px solid #333">Intangible asset; annual impairment test (no amortisation)</td></tr><tr style="background:#111"><td style="padding:5px;border:1px solid #333"><b>Bargain Purchase</b></td><td style="padding:5px;border:1px solid #333">FVNA &gt; Consideration (rare)</td><td style="padding:5px;border:1px solid #333">FVNA − Consideration</td><td style="padding:5px;border:1px solid #333">Reassess all measurements; gain to P&amp;L immediately</td></tr></table>'
+    }
+    ,{
+      std:'IFRS 9', topic:'Impairment',
+      q:['ecl staging','stage 1 stage 2 stage 3','ifrs 9 impairment stages','sicr trigger',
+         'significant increase credit risk','12 month ecl lifetime ecl','what triggers stage 2',
+         'ecl model ifrs 9','expected credit loss calculation','ecl formula'],
+      answer:`## IFRS 9 ECL — Three-Stage Impairment Model
+
+**Stage 1** → 12-month ECL | Interest on gross carrying amount
+**Stage 2** → Lifetime ECL (SICR triggered) | Interest on gross
+**Stage 3** → Lifetime ECL (credit-impaired) | Interest on net carrying amount
+
+### SICR Triggers (Stage 1 → Stage 2):
+- PD has increased significantly since origination (entity-defined threshold, e.g. 2×)
+- 30 days past due (rebuttable presumption — ISA 315 backstop)
+- Qualitative: covenant breach, restructuring request, watch-list classification
+
+### ECL Formula:
+**ECL = PD × LGD × EAD × Discount Factor**
+
+### Worked Example (Big 4 Bank Audit — PwC):
+Portfolio £500M: 95% Stage 1, 3% Stage 2, 2% Stage 3
+- Stage 1 £475M: PD 0.5%, LGD 25% → ECL = **£594K**
+- Stage 2 £15M: Lifetime PD 8%, LGD 30% → ECL = **£360K**
+- Stage 3 £10M: PD 80%, LGD 45% → ECL = **£3,600K**
+- **Total ECL = £4,554K**
+
+### Audit Focus (Deloitte/EY):
+Forward-looking macro overlays (GDP, unemployment), PD model backtesting, SICR symmetry, management bias review`
+    }
+    ,{
+      std:'IFRS 16', topic:'Leases',
+      q:['finance lease vs operating lease','difference between finance and operating lease',
+         'lease classification ifrs 16','ifrs 16 lessor classification','lessee treatment ifrs 16',
+         'what is finance lease','operating vs finance lease','how to classify lease ifrs'],
+      answer:`## Finance Lease vs Operating Lease — IFRS 16
+
+### Lessee (IFRS 16): No Classification Needed
+ALL leases → **ROU Asset + Lease Liability** on balance sheet.
+Exceptions: short-term (<12 months), low-value assets (~<$5,000)
+
+### Lessor Classification (IAS 17 criteria retained):
+**Finance Lease** — substantially all risks & rewards transferred:
+1. Ownership transfers by end of lease term
+2. Bargain purchase option exists
+3. Lease term ≥ **major part** of asset's useful life (Big 4 guideline: 75%+)
+4. PV of payments ≥ **substantially all** of fair value (guideline: 90%+)
+5. Specialised asset — only lessee can use
+
+**Operating Lease** — all other leases (asset remains on lessor's balance sheet)
+
+### IFRS 7 Maturity Disclosure:
+Lessee must include undiscounted lease payments in liquidity maturity table:
+*5-yr lease, £220K/yr:* <1yr £220K, 1-5yr £880K, total £1,100K (vs carrying amount £878K)
+
+### Worked Example (KPMG):
+Asset FV £1M, 5-yr lease, £220K/yr payments, rate 8%
+PV = £220K × 3.993 = £878K = **87.8% of FV** → borderline; check ownership/bargain purchase option`
+    }
+    ,{
+      std:'IFRS 3', topic:'Business Combinations',
+      q:['ifrs 3 acquisition method','goodwill calculation','purchase price allocation ppa',
+         'how to calculate goodwill','ifrs 3 fair value net assets','ppa intangibles'],
+      answer:`## IFRS 3 — Acquisition Method & Goodwill
+
+### Goodwill Formula:
+**Goodwill = Consideration + NCI Fair Value + Previously Held Interest − Fair Value of Net Identifiable Assets**
+
+### PPA — Purchase Price Allocation:
+All identifiable assets/liabilities must be recognised at **fair value** at acquisition date, including:
+- **Intangibles**: customer relationships (MEEM), brand (relief-from-royalty), technology, patents
+- **Contingent liabilities**: if present obligation + reliably measurable
+- **Deferred tax**: on FV uplift × tax rate
+
+### Worked Example (Deloitte):
+Consideration: £120M | Net book value: £60M
+FV uplifts: Property +£15M, Customer relationships +£20M, Brand +£10M, Technology +£8M
+**FVNA = £60M + £53M = £113M**
+**DT liability = £53M × 25% = £13.25M → restated FVNA = £99.75M**
+**Goodwill = £120M − £99.75M = £20.25M**
+
+### Auditor Procedures (ISA 540):
+Independence/competence of valuation specialist, challenge MEEM assumptions, test useful lives of acquired intangibles`
+    }
+    ,{
+      std:'IAS 36', topic:'Impairment',
+      q:['ias 36 impairment test','cgu recoverable amount','value in use calculation',
+         'goodwill impairment','how to perform impairment test','impairment indicators'],
+      answer:`## IAS 36 — Impairment Testing
+
+### The Test:
+**Impairment = Carrying Amount > Recoverable Amount**
+**Recoverable Amount = MAX(Fair Value Less Costs of Disposal, Value in Use)**
+
+### Value in Use:
+- Pre-tax cash flows discounted at pre-tax WACC
+- Terminal value at steady-state growth (≤ long-term GDP rate)
+- Exclude: future restructuring, uncommitted capex
+
+### Mandatory Annual Test:
+- Goodwill (always)
+- Indefinite-life intangibles
+- Intangibles not yet available for use
+
+### Worked Example (KPMG/EY):
+CGU carrying amount: £65M (Goodwill £15M, PPE £40M, Other £10M)
+VIU: discounted FCF = £62M | FV less costs = £60M
+**RA = £62M | Loss = £65M − £62M = £3M → allocated first to Goodwill**
+
+### Key Audit Procedures:
+Independent DCF model, sensitise WACC ±1% (→ ±£4M), test terminal growth vs GDP, corroborate forecasts vs board budgets`
+    }
+    ,{
+      std:'IAS 16', topic:'PPE',
+      q:['ias 16 depreciation','ppe capitalisation','cost model revaluation model ias 16',
+         'componentisation ias 16','straight line depreciation ias 16','ias 16 recognition'],
+      answer:`## IAS 16 — Property Plant & Equipment
+
+### Recognition (IAS 16.7):
+1. Probable future economic benefits will flow to entity
+2. Cost can be measured reliably
+
+### Initial Cost Includes:
+Purchase price + directly attributable costs + dismantlement costs (IAS 37)
+**NOT**: admin overhead, training costs, operating losses
+
+### Two Models:
+**Cost Model**: Cost − Accumulated Depreciation − Impairment
+**Revaluation Model**: Fair value − subsequent depreciation − impairment
+(Entire class must be revalued; surplus → OCI Revaluation Reserve)
+
+### Componentisation (IAS 16.43):
+Significant parts with different useful lives depreciated separately.
+*Aircraft: Body 20yr, Engines 15yr, Interior 8yr*
+
+### Worked Example:
+Factory £8M, residual £500K, useful life 20yr
+Annual SL depreciation = (£8M − £500K) / 20 = **£375,000 p.a.**
+Year 5 carrying amount = £8M − (5 × £375,000) = **£6,125,000**`
     }
   ],
 
@@ -8170,7 +8158,249 @@ Modified: *"Based on our review, except for the matter described below, nothing 
 
 ### Independence:
 Same independence requirements as audit (IESBA Code). Reviewer cannot be otherwise involved in the preparation of the financial statements being reviewed.`
-    },
+    }
+    ,{
+      std:'ISA 600', topic:'Group Audits',
+      q:['group auditor','isa 600','group audit','component auditor','group engagement partner',
+         'group audit responsibilities','component materiality','significant component',
+         'group audit procedures','overseas component','group instructions','foreign subsidiary audit',
+         'isa 600 requirements','reliance component auditor','group audit opinion'],
+      answer:`## ISA 600 — Group Auditor: Complete Guide
+
+**The group auditor (group engagement partner) is solely and completely responsible for the group audit opinion. They cannot reduce this responsibility by referencing component auditors (ISA 600.41).**
+
+### Step 1 — Classify Components:
+- **Significant**: individual financial significance to group (e.g. >15-20% of group assets/revenue) OR likely contains significant risks
+- **Non-significant**: all others
+
+### Step 2 — Component Materiality:
+Always LOWER than group. Big 4 practice: **50–75% of group performance materiality**
+- Group PM = $5M → Component = $2.5–3.75M
+- Aggregate of all component misstatements must not exceed group materiality
+
+### Step 3 — Determine Scope:
+| Component Type | Required Work |
+|---------------|--------------|
+| Significant (financial) | Full audit |
+| Significant (risk-based) | Specific risk-focused procedures |
+| Non-significant | Analytical procedures |
+
+### Step 4 — Group Instructions Must Include:
+✓ Identified significant risks at group level
+✓ Component materiality ($)
+✓ Related party list (all group-level related parties)
+✓ Required procedures and reporting format
+✓ Reporting deadline
+
+### Step 5 — Review Component Work:
+- Review work papers or detailed memo
+- Video/phone call to discuss findings
+- Consider travel for high-risk components
+- Document evaluation of component auditor competence & independence
+
+### Interview Scenarios:
+*"Chinese subsidiary = 35% of group assets, local firm auditing. What do you do?"*
+→ Evaluate Chinese firm's competence (PCAOB registration? Quality inspection results?)
+→ Issue detailed group instructions
+→ Review work papers; consider direct visit
+→ If inadequate: perform additional procedures OR qualify group opinion
+
+*"Component auditor issues a qualified opinion on a subsidiary. Does the group report get qualified?"*
+→ Not automatically. Assess: is the matter material to the GROUP? Is it pervasive?
+→ If material and not resolved → qualify group opinion`
+    }
+    ,{
+      std:'ISA 540', topic:'Estimates',
+      q:['isa 540','accounting estimates','management estimates','audit estimates',
+         'isa 540 revised','how to audit estimates','estimation uncertainty','estimate risk',
+         'pension estimate','ecl estimate audit','impairment estimate audit'],
+      answer:`## ISA 540 (Revised 2019) — Auditing Accounting Estimates
+
+### Key Changes (Revised ISA 540):
+1. **Spectrum of inherent risk** — estimates placed on scale, not just flagged as high/low
+2. **Explicit inherent risk factors**: complexity, subjectivity, measurement uncertainty, change, susceptibility to bias
+3. **Stronger management bias evaluation** — auditor must specifically evaluate whether estimate direction benefits management
+4. Expanded IT data requirements
+
+### Three Audit Approaches:
+1. **Test management's process** — review assumptions, data, model, controls
+2. **Develop auditor's own estimate** — independent range; evaluate if management's estimate is within it
+3. **Review subsequent events** — actual outcomes (only works for near year-end items)
+
+### Common Estimates — Big 4 Approaches:
+
+**IFRS 9 ECL (Deloitte/EY bank audits):**
+- Engage credit risk specialist
+- Backtesting: does PD model predict actual defaults?
+- Challenge SICR thresholds (symmetric?)
+- Stress macro scenarios; are weightings reasonable?
+
+**IAS 19 Pension DBO:**
+- Engage actuarial specialist (ISA 620)
+- Sensitise discount rate ±0.25% (impact on DBO)
+- Challenge mortality table (self-administered or industry tables?)
+
+**IAS 36 VIU:**
+- Build independent DCF; compare to management
+- Stress WACC ±1%, growth rate ±0.5%
+- Are cash flows consistent with board-approved budgets?
+
+### Management Bias Red Flags:
+- Estimate consistently at the edge of the range (always highest/lowest)
+- Prior-year estimates proved systematically optimistic
+- Estimate changed just enough to avoid covenant breach or loss`
+    }
+    ,{
+      std:'ISA 320', topic:'Materiality',
+      q:['materiality','performance materiality','how to calculate materiality','isa 320',
+         'planning materiality','audit materiality threshold','materiality benchmark',
+         'qualitative materiality','trivial threshold'],
+      answer:`## ISA 320 — Materiality
+
+### Definition:
+Misstatements are material if they **could reasonably be expected to influence the economic decisions of users** — individually or collectively.
+
+### Common Benchmarks (Big 4 practice):
+| Entity Type | Benchmark | Range |
+|------------|-----------|-------|
+| Profitable company | Pre-tax profit | 5–10% |
+| Low-margin / start-up | Revenue | 0.5–2% |
+| Financial institution | Total assets | 0.5–1% |
+| Holding company | Equity (NAV) | 1–5% |
+
+### Three Thresholds:
+1. **Overall (Planning) Materiality** = e.g. 7% × pre-tax profit
+2. **Performance Materiality** = 60–75% of planning materiality (allows for aggregate misstatements)
+3. **Trivial Threshold** = 5% of planning materiality (pass misstatements below this without aggregating)
+
+### Worked Example:
+Pre-tax profit £8M | Revenue £120M | Total assets £95M
+Planning materiality = 7% × £8M = **£560,000**
+Performance materiality = 70% × £560,000 = **£392,000**
+Trivial = 5% × £560,000 = **£28,000**
+
+### Qualitative Materiality:
+Quantitatively below threshold but still material if:
+- Related party transaction at non-market terms
+- Regulatory/legal compliance item
+- Small amount that turns a profit into a loss
+- Fraud-related item (any size)`
+    }
+    ,{
+      std:'ISA 240', topic:'Fraud',
+      q:['fraud','isa 240','fraud risk','auditor fraud responsibilities','management override',
+         'two types of fraud','fraudulent financial reporting','misappropriation',
+         'journal entry testing','fraud triangle','revenue fraud'],
+      answer:`## ISA 240 — Fraud Responsibilities
+
+### Two Types of Fraud:
+1. **Fraudulent Financial Reporting** — intentional misstatement of FS (e.g. revenue overstatement, liability understatement)
+2. **Misappropriation of Assets** — theft (cash, inventory, fictitious vendors, payroll fraud)
+
+### Two Presumed Fraud Risks (mandatory):
+1. **Revenue recognition** — presumed risk of fraudulent reporting (can rebut with documented justification)
+2. **Management override of controls** — always a significant risk (CANNOT be rebutted)
+
+### Fraud Triangle:
+- **Incentive/Pressure**: bonus targets, debt covenants, analyst expectations
+- **Opportunity**: weak controls, management override, complex transactions
+- **Rationalisation**: ethical culture breakdown
+
+### Mandatory Procedures:
+**Management Override:**
+- Journal entry testing (end-period, round numbers, unusual accounts, management-posted)
+- Review accounting estimates for bias (ISA 540 linkage)
+- Evaluate significant unusual transactions
+
+**Team Discussion (ISA 240.15):**
+Required brainstorming — how could fraud occur in this entity? Focus areas?
+
+### Practical Example (EY investigation):
+*Channel stuffing: revenue recognised before delivery*
+Response: Cut-off testing 30 days post year-end, direct confirmations to end-customers, test debit memos/returns in Q1, challenge IFRS 15 Step 5 satisfaction of performance obligation
+
+### Journal Entry Testing (Deloitte/PwC):
+Filter: non-standard, end-period, round numbers, weekend posts, unsupported, posted by senior management
+Sample: all above-threshold unusual + random sample of routine entries`
+    }
+    ,{
+      std:'ISA 701', topic:'Reporting',
+      q:['key audit matter','kam','isa 701','what is kam','how to determine kam',
+         'key audit matters listed companies','significant judgements in audit report',
+         'why isa 701 was introduced','kam examples'],
+      answer:`## ISA 701 — Key Audit Matters
+
+### What: Matters of MOST significance in the current period audit (listed entities mandatory; others encouraged)
+
+### ISA 701.9 — Three Criteria:
+1. Higher assessed **risk of material misstatement** (including significant risks)
+2. Significant auditor **judgements** in areas of management judgement
+3. Significant **events or transactions** during the period
+
+### NOT automatically KAMs:
+- All significant risks → must also be of "most significance"
+- Going concern material uncertainty → separate paragraph (not KAM)
+
+### Big 4 Typical KAMs:
+
+**Banking (Deloitte/PwC):**
+- ECL provisioning — model complexity, forward-looking assumptions, management overlay
+- Fair value of Level 3 instruments — unobservable inputs (IFRS 13)
+
+**Manufacturing/Industrial (EY/KPMG):**
+- Goodwill impairment testing — DCF sensitivity, WACC assumptions (IAS 36)
+- Revenue recognition — long-term contract POC method (IFRS 15)
+
+**Insurance:**
+- Contractual Service Margin (CSM) — actuarial assumptions (IFRS 17)
+
+### KAM Report Format:
+1. **Why significant**: describe why matter was of most significance
+2. **How addressed**: key audit procedures performed
+3. **Reference**: relevant financial statement note
+
+### Example KAM (Deloitte FTSE 100):
+*"Valuation of pension DBO (IAS 19) — DBO of £2.8B is highly sensitive to actuarial assumptions. We engaged our actuarial specialist who independently recalculated the DBO. We challenged the discount rate (3.8% vs AA bond yield range 3.6–4.0%). We found management's assumptions within acceptable range — no material difference identified."*`
+    }
+    ,{
+      std:'ISA 700', topic:'Reporting',
+      q:['audit report','modified opinion','qualified opinion','adverse opinion','disclaimer',
+         'types of audit opinion','isa 700','isa 705','when to qualify','pervasive',
+         'what makes opinion adverse','scope limitation'],
+      answer:`## ISA 700/705 — Audit Opinions
+
+### Opinion Matrix:
+| Situation | NOT pervasive | Pervasive |
+|-----------|--------------|-----------|
+| **Misstatement** | Qualified ("except for") | Adverse |
+| **Scope limitation** | Qualified ("except for") | Disclaimer |
+
+### What is Pervasive? (ISA 705.5):
+- Not confined to specific element (widespread)
+- Confined to specific element but that element = substantial portion of FS
+- Relates to disclosures that are fundamental to users' understanding
+
+### Practical Examples:
+
+**Qualified (misstatement):**
+*Inventory £3M measured at cost; NRV is £1.5M — should be written down. Total assets £80M.*
+→ Material (3.75% assets) but not pervasive → **Qualified "except for" inventory overstatement**
+
+**Qualified (scope limitation):**
+*Auditor cannot attend inventory count (£5M) due to COVID restrictions. Total assets £120M.*
+→ Material but not pervasive → **Qualified for limitation of scope**
+
+**Adverse:**
+*Management refuses to consolidate subsidiary representing 55% of group assets (IFRS 10 breach)*
+→ Material AND pervasive → **Adverse**
+
+**Disclaimer:**
+*Fire destroyed all accounting records. No evidence available for £200M revenue.*
+→ Scope limitation that is material AND pervasive → **Disclaimer**
+
+### Report Structure (ISA 700):
+Opinion → Basis for Opinion → GC (if applicable) → KAMs (listed) → Other Information → Responsibilities`
+    }
   ]
 };
 
@@ -8311,7 +8541,7 @@ var SYNONYM_MAP = {
   'leaseback':['lease back','sale leaseback','slb'],
   'slb':['sale and leaseback','leaseback'],
   'ecl':['expected credit loss','credit impairment','loan loss'],
-  'rou':['right of use','right-of-use','right-of-use asset'],
+  'rou':['right of use','right-of-use'],
   'sicr':['significant increase credit risk','stage 2 trigger'],
   'hedge':['hedging instrument','hedged item','hedge accounting'],
   'provision':['ias 37','constructive obligation'],
@@ -8320,22 +8550,6 @@ var SYNONYM_MAP = {
   'impairment':['ias 36','cgu','recoverable amount'],
   'goodwill':['purchase price excess','excess consideration'],
   'wacc':['weighted average cost of capital','cost of capital'],
-  'group auditor':['group engagement partner','group audit','component auditor','isa 600'],
-  'component auditor':['group auditor','isa 600','component','foreign auditor'],
-  'finance lease':['financial lease','capital lease','risks and rewards transferred'],
-  'operating lease':['op lease','short-term lease','low value lease'],
-  'lease classification':['finance vs operating','operating vs finance','ifrs 16 lessor'],
-  'group audit':['group financial statements','group accounts','consolidated audit'],
-  'specialist':['expert','auditor expert','isa 620','valuation expert'],
-  'management expert':['actuarial','surveyor','valuation specialist','isa 620'],
-  'maturity analysis':['liquidity risk disclosure','undiscounted cash flows','ifrs 7 maturity'],
-  'ppe':['property plant equipment','ias 16','fixed assets','tangible assets'],
-  'ifrs 7':['financial instruments disclosure','risk disclosure','market risk','credit risk disclosure'],
-  'going concern':['isa 570','material uncertainty','viability','liquidation risk'],
-  'fraud risk':['isa 240','management override','journal entries','presumed fraud risk'],
-  'key audit matter':['kam','isa 701','significant judgements','auditor focus areas'],
-  'estimate':['accounting estimate','isa 540','management estimate','actuarial assumption'],
-  'internal control':['isa 315','itgc','control deficiency','significant deficiency'],
 };
 var _NLP_FILLER=[
   /^tell\s+me\s+(about|regarding|on|for)\s+/i,
@@ -8356,49 +8570,34 @@ function _expandQuery(query){
   var q=_cleanQueryNLP(query),expanded=[q];
   if(q!==query.toLowerCase())expanded.push(query.toLowerCase());
   Object.keys(SYNONYM_MAP).forEach(function(key){
+    /* Use whole-word match to avoid "rou" matching inside "group" */
+    var re = new RegExp('\\b'+key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\b','i');
     expanded.slice().forEach(function(qv){
-      if(qv.indexOf(key)>=0)(SYNONYM_MAP[key]||[]).forEach(function(s){if(expanded.indexOf(s)<0)expanded.push(s);});
+      if(re.test(qv))(SYNONYM_MAP[key]||[]).forEach(function(s){if(expanded.indexOf(s)<0)expanded.push(s);});
     });
   });
   return expanded;
 }
 
 function _scoreEntry(entry, terms, fields) {
-  if (!terms || !terms.length) return 0;
-  var termsArr = Array.isArray(terms) ? terms : terms.split(/\s+/).filter(Boolean);
   var score = 0;
-  /* Field weights — std/title most important, keywords gets high weight too */
-  var weights = {std:12, title:10, topic:8, keywords:9, summary:5, problem:4, solution:4, auditor:3, example:3};
-  termsArr.forEach(function(term) {
+  terms.forEach(function(term) {
     var t = term.toLowerCase();
-    if (t.length < 2) return;
     fields.forEach(function(f) {
-      var raw = entry[f];
-      var val = Array.isArray(raw) ? raw.join(' ').toLowerCase() : (raw || '').toLowerCase();
-      if (!val) return;
+      var val = (entry[f] || '').toLowerCase();
       if (val.indexOf(t) >= 0) {
-        var w = weights[f] || 2;
+        // Weight by field importance
+        var w = f==='std'?10 : f==='title'?8 : f==='topic'?6 : f==='summary'?4 : 2;
         score += w;
-        // Whole-word match bonus
-        var wordRe = new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b', 'g');
-        var wordCnt = (val.match(wordRe) || []).length;
-        if (wordCnt > 0) score += wordCnt * 2;
-        // Count all occurrences
-        var anyRe = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
-        var cnt = (val.match(anyRe) || []).length;
+        // Exact match bonus
+        if (val === t) score += 5;
+        // Count occurrences
+        var re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
+        var cnt = (val.match(re)||[]).length;
         score += cnt * 0.5;
       }
     });
   });
-  /* Phrase-match bonus: if 2+ consecutive terms match in same field, large boost */
-  if (termsArr.length >= 2) {
-    var phrase = termsArr.join(' ');
-    fields.forEach(function(f) {
-      var raw = entry[f];
-      var val = Array.isArray(raw) ? raw.join(' ').toLowerCase() : (raw || '').toLowerCase();
-      if (val.indexOf(phrase) >= 0) score += 20;
-    });
-  }
   return score;
 }
 
@@ -8491,19 +8690,13 @@ function _gkbRenderAll(query) {
   // ── Step 1: Check Q&A pairs ──────────────────────────────────────
   var qaMatch = _findQAMatch(query, _gkbType);
 
-  // ── Step 2: Score KB entries — search ALL kb entries when query present ──
+  // ── Step 2: Score KB entries ────────────────────────────────────
   var terms = _tokenize(query);
-  /* Also add expanded synonym terms */
-  var expandedQ = typeof _expandQuery === 'function' ? _expandQuery(query) : [query.toLowerCase()];
-  expandedQ.forEach(function(eq) {
-    var extraTokens = _tokenize(eq);
-    extraTokens.forEach(function(t) { if (terms.indexOf(t) < 0) terms.push(t); });
-  });
-  var conceptBoosts = _conceptBoost(query, kb); /* boost from full kb, not filtered */
+  var conceptBoosts = _conceptBoost(query, filtered);
   var fields = ['std', 'title', 'topic', 'summary', 'problem', 'solution', 'auditor', 'example', 'keywords'];
 
-  /* Search ALL kb entries when query present — filter only limits default display */
-  var scored = kb.map(function(e) {
+  var scored = filtered.map(function(e) {
+    // Build keywords string from array if present
     var kw = Array.isArray(e.keywords) ? e.keywords.join(' ') : (e.keywords || '');
     var entryWithKW = Object.assign({}, e, { keywords: kw });
     var s = _scoreEntry(entryWithKW, terms, fields);
@@ -8522,7 +8715,7 @@ function _gkbRenderAll(query) {
   }
 
   // KB cards
-  var topCards = scored.slice(0, qaMatch ? 4 : 12);
+  var topCards = scored.slice(0, qaMatch ? 3 : 8);
   if (topCards.length > 0) {
     html += '<div style="font-size:11px;color:#636366;padding:' + (qaMatch ? '20px 0 8px' : '8px 0 12px') + '">'
       + (qaMatch ? 'Related Standards:' : scored.length + ' standard' + (scored.length === 1 ? '' : 's') + ' matched for "' + esc(query) + '"')
