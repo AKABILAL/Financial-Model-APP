@@ -4467,7 +4467,8 @@ function _buildKPIs(model,s){
   if(s.fcff&&kpis.length<4){var v=lastNonNull(s.fcff);if(v!==null)kpis.push({label:'Free Cash Flow',value:_shortNum(v)});}
   if(s.nbv&&kpis.length<4){var v=lastNonNull(s.nbv);if(v!==null)kpis.push({label:'Net Book Value',value:_shortNum(v)});}
   if(s.ecl&&kpis.length<4){var v=lastNonNull(s.ecl);if(v!==null)kpis.push({label:'Total ECL',value:_shortNum(v)});}
-  if(s.leaseLiab&&kpis.length<4){var v=lastNonNull(s.leaseLiab);if(v!==null)kpis.push({label:'Lease Liability',value:_shortNum(v)});}
+  if(s.leaseLiab&&kpis.length<4){var v=firstNonNull(s.leaseLiab);if(v!==null)kpis.push({label:'Initial Lease Liability',value:_shortNum(v)});}
+  if(s.rouClose&&kpis.length<4){var v=firstNonNull(s.rouClose);if(v!==null)kpis.push({label:'Initial ROU Asset',value:_shortNum(v)});}
   if(s.dbo&&kpis.length<4){var v=lastNonNull(s.dbo);if(v!==null)kpis.push({label:'DBO',value:_shortNum(v)});}
   if(s.ev&&kpis.length<4){var v=lastNonNull(s.ev);if(v!==null)kpis.push({label:'Enterprise Value',value:_shortNum(v)});}
   if(s.netPension&&kpis.length<4){var v=lastNonNull(s.netPension);if(v!==null)kpis.push({label:'Net Pension Liab',value:_shortNum(v)});}
