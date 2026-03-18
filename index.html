@@ -351,6 +351,19 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
   transition:border-color .12s;
 }
 .ai:focus{border-bottom-color:#86BC25}
+select.ai{
+  appearance:none;-webkit-appearance:none;cursor:pointer;
+  font-size:11px;font-weight:600;padding:4px 0;color:#e5e5ea;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2386BC25'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 2px center;padding-right:16px;
+}
+select.ai option{background:#1c1c1e;color:#f5f5f7;font-size:11px;}
+.asm-sub-hdr{
+  font-family:ui-monospace,monospace;font-size:8px;color:#86BC25;
+  text-transform:uppercase;letter-spacing:1px;padding:6px 0 4px;
+  border-top:1px solid #1c1c1e;margin-top:4px;font-weight:700;
+  grid-column:1/-1;
+}
 .au{font-size:9px;color:#636366;flex-shrink:0;font-weight:500}
 .asm-del{position:absolute;top:7px;right:8px;color:#3a3a3c;font-size:11px;cursor:pointer;transition:color .1s}
 .asm-del:hover{color:#ff453a}
@@ -674,8 +687,6 @@ body{background:#000;color:#f5f5f7;display:flex;flex-direction:column}
     <div class="sl">IFRS 9 — Advanced</div>
     <button class="qc" onclick="qb('IFRS 9 hedge accounting cash flow hedge 5 years')"><span class="qt">IFRS 9</span>Hedge Accounting (CFH/FVH)</button>
     <button class="qc" onclick="qb('IFRS 9 classification measurement SPPI business model test')"><span class="qt">IFRS 9</span>Classification &amp; Measurement</button>
-    <div class="sl">IFRS 16 — Advanced</div>
-    <button class="qc" onclick="qb('IFRS 16 lease modification reassessment IBR revised 5 years')"><span class="qt">IFRS 16</span>Lease Modification</button>
     <div class="sl">IAS 12 — Advanced</div>
     <button class="qc" onclick="qb('IAS 12 balance sheet approach carrying amount tax base temporary differences')"><span class="qt">IAS 12</span>Balance Sheet Approach</button>
     <div class="sl">Group / Consolidation</div>
@@ -985,13 +996,12 @@ function detect(p){
     'IAS38':0,'IAS37':0,'IAS36':0,'IAS19':0,'IAS16':0,'IAS12':0,'IAS2':0,
     'DCF':0,'LBO':0,
     'DDM':0,'COMPS':0,'NAV':0,'IAS12BS':0,
-    'IFRS9HEDGE':0,'IFRS9CM':0,'IFRS16MOD':0,'IFRS3':0,'IFRS10':0
+    'IFRS9HEDGE':0,'IFRS9CM':0,'IFRS3':0,'IFRS10':0
   };
   var patterns=[
     /* New specific patterns FIRST — more specific than generic numbered standard */
     ['IFRS9HEDGE', /hedge.?account|cash.?flow.?hedge|fair.?value.?hedge|net.?invest.?hedge/g],
     ['IFRS9CM',    /\bsppi\b|classif.*measur|business.?model.*test/g],
-    ['IFRS16MOD',  /lease.?modif|lease.?reassess|lease.*modif/g],
     ['IAS12BS',    /balance.?sheet.*deferred|carrying.?amt.*tax.?base|tax.?base/g],
     ['IFRS3',      /business.?combin|purchase.?price.?alloc|\bppa\b|ifrs\s*3\b/g],
     ['IFRS10',     /ifrs\s*10\b|consolid.*group|interco.*eliminat/g],
@@ -1125,8 +1135,8 @@ function buildIFRS9(p){
   var e2Base=r2(s2*s2pd*0.96*s2lgd*d2);
   var e2Dn=r2(s2*s2pd*1.60*s2lgd*d2);
   var e2PW=r2(e2Base*bw+e2Up*uw+e2Dn*dw);
-  /* Coverage ratios */
-  var cov1=r2(e1/s1*100), cov2=r2(e2/s2*100), cov3=r2(e3/s3*100), covT=r2(totECL/tot*100);
+  /* Coverage ratios — guard against division by zero if any stage EAD = 0 */
+  var cov1=s1!==0?r2(e1/s1*100):0, cov2=s2!==0?r2(e2/s2*100):0, cov3=s3!==0?r2(e3/s3*100):0, covT=tot!==0?r2(totECL/tot*100):0;
   /* Net carrying amount */
   var net1=r2(s1-e1), net2=r2(s2-e2), net3=r2(s3-e3), netT=r2(tot-totECL);
   /* Interest income: Stage 1&2 on gross, Stage 3 on net */
@@ -1145,7 +1155,8 @@ function buildIFRS9(p){
     tableRows:[
       sh('── PORTFOLIO COMPOSITION ──────────────────'),
       dr('Gross Carrying Amount ($M)',[s1,s2,s3,tot]),
-      pdr('% of Total Portfolio',[r2(s1/tot*100),r2(s2/tot*100),r2(s3/tot*100),100]),
+      /* Guard: avoid divide-by-zero when tot = 0 */
+      pdr('% of Total Portfolio',[tot!==0?r2(s1/tot*100):0,tot!==0?r2(s2/tot*100):0,tot!==0?r2(s3/tot*100):0,100]),
       sh('── INTEREST INCOME (per IFRS 9.5.4) ────────'),
       dr('EIR',[a('s1EIR'),a('s2EIR'),a('s3EIR'),'—'],'percent'),
       dr('Interest Income Basis',['Gross','Gross','Net (carrying)','—'],'text'),
@@ -1183,7 +1194,8 @@ function buildIFRS9(p){
     assumptions: ASM,
     analysis:{
       summary:'Total ECL of $'+totECL+'M on a $'+tot+'M portfolio (coverage '+covT+'%). Stage 3 contributes '
-        +r2(e3/totECL*100)+'% of provisions but only '+r2(s3/tot*100)+'% of portfolio — reflects concentration of credit impairment. Forward-looking overlay of ×'+fli.toFixed(2)+' applied to base ECL.',
+        /* Guard: avoid divide-by-zero in analysis strings */
+        +(totECL!==0?r2(e3/totECL*100):0)+'% of provisions but only '+(tot!==0?r2(s3/tot*100):0)+'% of portfolio — reflects concentration of credit impairment. Forward-looking overlay of ×'+fli.toFixed(2)+' applied to base ECL.',
       keyFindings:[
         'Portfolio: $'+tot+'M gross | ECL: $'+totECL+'M | Coverage: '+covT+'%',
         'Stage 1 (12m PD '+a('s1PD12m')+'%): $'+e1+'M | Stage 2 (LT PD '+a('s2PDLife')+'%): $'+e2+'M | Stage 3 (LT PD '+a('s3PDLife')+'%): $'+e3+'M',
@@ -1195,7 +1207,8 @@ function buildIFRS9(p){
         'SICR assessment is judgemental — failure to identify Stage 2 leads to systematic under-provisioning',
         'LGD estimation sensitive to collateral valuations and post-default recovery rates',
         'FLI adjustment relies on quality of macroeconomic forecasts (base/up/down scenarios)',
-        'Stage 3 concentration risk: '+r2(e3/totECL*100)+'% of ECL in '+r2(s3/tot*100)+'% of portfolio',
+        /* Guard: avoid divide-by-zero in risk string */
+        'Stage 3 concentration risk: '+(totECL!==0?r2(e3/totECL*100):0)+'% of ECL in '+(tot!==0?r2(s3/tot*100):0)+'% of portfolio',
       ],
       recommendations:[
         'Adopt 30-DPD as quantitative SICR trigger per IFRS 9.5.5.11 (rebuttable presumption)',
@@ -1226,21 +1239,65 @@ function buildIFRS16(p){
   var n=parseYrs(p), sy=parseSY(p);
   var pmtMatch=p.match(/\$\s*([\d,]+)/);
   var pmtVal=pmtMatch?parseInt(pmtMatch[1].replace(',','')):10000;
-  /* Only init ASM if not already set (preserve user edits on recompute) */
-  if(!ASM.leaseTerm){
-    freshASM({
-      annualPmt:   {label:'Annual Lease Payment (arrears)',value:pmtVal*12, unit:'USD'},
-      leaseTerm:   {label:'Lease Term (Years)',            value:n,        unit:'yrs'},
-      ibr:         {label:'Incremental Borrowing Rate',    value:5.50,     unit:'%'},
-      idc:         {label:'Initial Direct Costs',          value:5000,     unit:'USD'},
-      incentives:  {label:'Lease Incentives Received',     value:0,        unit:'USD'},
-      dismantling: {label:'Dismantling Provision (IAS 37)',value:0,        unit:'USD'},
-      rentReview:  {label:'Annual Rent Review Rate',       value:2.0,      unit:'%'},
-      residualGtd: {label:'Residual Value Guarantee',      value:0,        unit:'USD'},
-      startYear:   {label:'Commencement Year',             value:sy,       unit:''},
-    });
-  }
-  /* Always read n and sy from ASM so changes are picked up */
+  var MOD_OPTS=[
+    {value:1,label:'Scope Increase — Separate Lease (IFRS 16.44)'},
+    {value:2,label:'Scope Increase — Not Separate (IFRS 16.45)'},
+    {value:3,label:'Scope Decrease / Partial Termination (IFRS 16.46)'},
+    {value:4,label:'Payment Change Only (IFRS 16.45)'},
+    {value:5,label:'Term Change (IFRS 16.45)'},
+    {value:6,label:'Other Remeasurement (IFRS 16.45)'},
+  ];
+  var REAS_OPTS=[
+    {value:1,label:'Index / Rate Change (retains original IBR — IFRS 16.42)'},
+    {value:2,label:'Purchase Option Reassessment'},
+    {value:3,label:'Termination Option Reassessment'},
+    {value:4,label:'Residual Value Guarantee Change'},
+    {value:5,label:'Lease Term Reassessment'},
+  ];
+  freshASM({
+    annualPmt:        {label:'Annual Lease Payment (arrears)',           value:pmtVal*12, unit:'USD'},
+    leaseTerm:        {label:'Lease Term (Years)',                       value:n,         unit:'yrs'},
+    ibr:              {label:'Incremental Borrowing Rate',               value:5.50,      unit:'%'},
+    idc:              {label:'Initial Direct Costs',                     value:5000,      unit:'USD'},
+    incentives:       {label:'Lease Incentives Received',               value:0,          unit:'USD'},
+    dismantling:      {label:'Dismantling Provision (IAS 37)',           value:0,          unit:'USD'},
+    rentReview:       {label:'Annual Rent Review Rate',                  value:2.0,        unit:'%'},
+    residualGtd:      {label:'Residual Value Guarantee',                 value:0,          unit:'USD'},
+    startYear:        {label:'Commencement Year',                        value:sy,         unit:''},
+    advRentalEnabled: {label:'Advance Rental Enabled (1=yes 0=no)',      value:0,          unit:''},
+    advRentalPeriods: {label:'Advance Rental Periods (N)',               value:1,          unit:''},
+    advRentalAmount:  {label:'Advance Rental Amount (0=use regular pmt)',value:0,          unit:'USD'},
+    /* ── Lease Modifications (up to 3) ── */
+    mod1Year:     {label:'Mod 1: Effective Year (0 = none)',              value:0, unit:'', section:'── Modification 1 ──'},
+    mod1Type:     {label:'Mod 1: Modification Type',                      value:4, unit:'', type:'select', options:MOD_OPTS},
+    mod1NewPmt:   {label:'Mod 1: New Annual Payment ($)',                 value:0, unit:'USD'},
+    mod1NewTerm:  {label:'Mod 1: Remaining Term after Mod (yrs)',         value:0, unit:'yrs'},
+    mod1NewIBR:   {label:'Mod 1: Revised IBR %',                         value:0, unit:'%'},
+    mod1ScopePct: {label:'Mod 1: Scope Decrease % (type 3 only)',        value:0, unit:'%'},
+    mod2Year:     {label:'Mod 2: Effective Year (0 = none)',              value:0, unit:'', section:'── Modification 2 ──'},
+    mod2Type:     {label:'Mod 2: Modification Type',                      value:4, unit:'', type:'select', options:MOD_OPTS},
+    mod2NewPmt:   {label:'Mod 2: New Annual Payment ($)',                 value:0, unit:'USD'},
+    mod2NewTerm:  {label:'Mod 2: Remaining Term after Mod (yrs)',         value:0, unit:'yrs'},
+    mod2NewIBR:   {label:'Mod 2: Revised IBR %',                         value:0, unit:'%'},
+    mod2ScopePct: {label:'Mod 2: Scope Decrease % (type 3 only)',        value:0, unit:'%'},
+    mod3Year:     {label:'Mod 3: Effective Year (0 = none)',              value:0, unit:'', section:'── Modification 3 ──'},
+    mod3Type:     {label:'Mod 3: Modification Type',                      value:4, unit:'', type:'select', options:MOD_OPTS},
+    mod3NewPmt:   {label:'Mod 3: New Annual Payment ($)',                 value:0, unit:'USD'},
+    mod3NewTerm:  {label:'Mod 3: Remaining Term after Mod (yrs)',         value:0, unit:'yrs'},
+    mod3NewIBR:   {label:'Mod 3: Revised IBR %',                         value:0, unit:'%'},
+    mod3ScopePct: {label:'Mod 3: Scope Decrease % (type 3 only)',        value:0, unit:'%'},
+    /* ── Reassessment Events (up to 2) ── */
+    reas1Year:    {label:'Reas 1: Year (0 = none)',                        value:0, unit:'', section:'── Reassessment 1 ──'},
+    reas1Type:    {label:'Reas 1: Reassessment Type',                      value:1, unit:'', type:'select', options:REAS_OPTS},
+    reas1NewPmt:  {label:'Reas 1: Revised Payment ($)',                   value:0, unit:'USD'},
+    reas1NewTerm: {label:'Reas 1: Revised Remaining Term (0 = unchanged)', value:0, unit:'yrs'},
+    reas1NewIBR:  {label:'Reas 1: Revised IBR % (non-index types)',       value:0, unit:'%'},
+    reas2Year:    {label:'Reas 2: Year (0 = none)',                        value:0, unit:'', section:'── Reassessment 2 ──'},
+    reas2Type:    {label:'Reas 2: Reassessment Type',                      value:1, unit:'', type:'select', options:REAS_OPTS},
+    reas2NewPmt:  {label:'Reas 2: Revised Payment ($)',                   value:0, unit:'USD'},
+    reas2NewTerm: {label:'Reas 2: Revised Remaining Term (0 = unchanged)', value:0, unit:'yrs'},
+    reas2NewIBR:  {label:'Reas 2: Revised IBR % (non-index types)',       value:0, unit:'%'},
+  });
   var nActual = Math.max(1, Math.min(20, Math.round(a('leaseTerm'))||n));
   var syActual = Math.round(a('startYear'))||sy;
   return computeIFRS16(nActual, syActual);
@@ -1249,105 +1306,378 @@ function computeIFRS16(n,sy){
   var ibr=a('ibr')/100;
   var ann=a('annualPmt');
   var rr=a('rentReview')/100;
-  /* Initial lease liability = PV of payments (no rent review at inception — use initial payment) */
-  var liabInit=r0(pv(ann,ibr,n)+a('residualGtd')/Math.pow(1+ibr,n));
-  /* ROU asset = lease liability + IDC - incentives + dismantling */
-  var rouInit=r0(liabInit+a('idc')-a('incentives')+a('dismantling'));
-  /* Straight-line depreciation of ROU asset over lease term */
+  /* ── Advance Rental Parameters (IFRS 16.26) ── */
+  var advEnabled=a('advRentalEnabled')>=1;
+  var advPeriods=advEnabled?Math.max(0,Math.min(n-1,Math.round(a('advRentalPeriods')))):0;
+  var advAmt=(advEnabled&&a('advRentalAmount')>0)?a('advRentalAmount'):ann;
+  var totalAdvance=r0(advPeriods*advAmt);
+  /* Initial lease liability = PV of remaining arrears payments (excluding advance-covered periods) */
+  /* Bug fix: subtract PV of advance-covered periods, not nominal totalAdvance */
+  /* Note: advPeriods is already clamped to Math.min(n-1,...) above, so advPeriods < n is guaranteed */
+  var liabInit=Math.max(0,r0(pv(ann,ibr,n)-pv(ann,ibr,advPeriods)+a('residualGtd')/Math.pow(1+ibr,n)));
+  /* ROU asset = lease liability + advance payments + IDC − incentives + dismantling */
+  var rouInit=r0(liabInit+totalAdvance+a('idc')-a('incentives')+a('dismantling'));
   var deprAnn=r0(rouInit/n);
-  /* Build annual amortisation schedule - EIR method for liability */
+  /* ── Modification / Reassessment Labels ── */
+  var MOD_LABELS={1:'Scope Increase (Separate Lease)',2:'Scope Increase (Not Separate)',
+    3:'Scope Decrease',4:'Payment Change Only',5:'Term Change',6:'Other Remeasurement'};
+  var REAS_LABELS={1:'Index/Rate Adjustment',2:'Purchase Option Reassessment',
+    3:'Termination Option Reassessment',4:'Residual Value Guarantee Change',5:'Lease Term Reassessment'};
+  function pvAnn(pmt,rate,years){
+    if(years<=0) return 0;
+    if(rate<=0) return r0(pmt*years);
+    return r0(pmt*(1-Math.pow(1+rate,-years))/rate);
+  }
+  /* ── Build event list ── */
+  var events=[];
+  for(var mi=1;mi<=3;mi++){
+    var mYr=Math.round(a('mod'+mi+'Year'));
+    if(mYr>0){
+      events.push({year:mYr,kind:'modification',idx:mi,
+        type:Math.round(a('mod'+mi+'Type')),typeName:MOD_LABELS[Math.round(a('mod'+mi+'Type'))]||'Modification',
+        newPmt:a('mod'+mi+'NewPmt'),newTerm:Math.max(0,Math.round(a('mod'+mi+'NewTerm'))), /* 0 = fall back to current remaining term (applies to all modification types) */
+        newIBR:a('mod'+mi+'NewIBR')/100,scopePct:Math.min(1,Math.max(0,a('mod'+mi+'ScopePct')/100)),
+        priority:2});
+    }
+  }
+  for(var ri=1;ri<=2;ri++){
+    var rYr=Math.round(a('reas'+ri+'Year'));
+    if(rYr>0){
+      var rType=Math.round(a('reas'+ri+'Type'));
+      events.push({year:rYr,kind:'reassessment',idx:ri,
+        type:rType,typeName:REAS_LABELS[rType]||'Reassessment',
+        newPmt:a('reas'+ri+'NewPmt'),newTerm:Math.round(a('reas'+ri+'NewTerm')),
+        useOrigR:rType===1,newIBR:a('reas'+ri+'NewIBR')/100,
+        priority:1});
+    }
+  }
+  /* Sort chronologically; reassessments before modifications on same year */
+  events.sort(function(evA,evB){return evA.year!==evB.year?evA.year-evB.year:evA.priority-evB.priority;});
+  var eventsByYear={};
+  events.forEach(function(ev){
+    if(!eventsByYear[ev.year]) eventsByYear[ev.year]=[];
+    eventsByYear[ev.year].push(ev);
+  });
+  /* Extend schedule length if events extend the lease */
+  var maxYrs=n;
+  events.forEach(function(ev){
+    if(ev.kind==='modification'&&ev.type!==1&&ev.newTerm>0){
+      var endYr=ev.year+ev.newTerm-1; if(endYr>maxYrs) maxYrs=endYr;
+    }
+    if(ev.kind==='reassessment'&&ev.newTerm>0){
+      var endYr2=ev.year+ev.newTerm-1; if(endYr2>maxYrs) maxYrs=endYr2;
+    }
+  });
+  maxYrs=Math.min(20,maxYrs);
+  /* ── Running state ── */
+  var ll=liabInit, rou=rouInit;
+  var curDeprAnn=deprAnn, curRemTerm=n, curIBR=ibr, curPmt=ann, hadEvent=false;
+  var journalEntries=[], eventLog=[];
+  /* ── Build annual amortisation schedule ── */
   var schedule=[];
-  var lb=liabInit;
-  for(var yr=1;yr<=n;yr++){
-    var pmtYr=r0(ann*Math.pow(1+rr,yr-1)); // rent review applied
-    var intYr=r0(lb*ibr); // interest at EIR on opening balance
-    var prYr=pmtYr-intYr; // principal = payment - interest
-    var lbClose=r0(lb-prYr);
-    schedule.push({yr:sy+yr-1,lbOpen:r0(lb),int:intYr,pmt:-pmtYr,pr:prYr,lbClose:lbClose>0?lbClose:0,rouOpen:r0(rouInit-deprAnn*(yr-1)),rouClose:Math.max(0,r0(rouInit-deprAnn*yr))});
-    lb=lbClose;
+  for(var yr=1;yr<=maxYrs;yr++){
+    var evs=eventsByYear[yr]||[];
+    var isEventYr=evs.length>0;
+    var isAdv=advEnabled&&yr<=advPeriods;
+    /* Apply events at start of year (post-event opening balance used for EIR below) */
+    evs.forEach(function(ev){
+      var llBef=ll, rouBef=rou;
+      if(ev.kind==='reassessment'){
+        var rRate=ev.useOrigR?ibr:ev.newIBR;
+        var rTerm=ev.newTerm>0?ev.newTerm:Math.max(1,curRemTerm);
+        var newLL_r=pvAnn(ev.newPmt,rRate,rTerm);
+        var llAdj=r0(newLL_r-llBef);
+        var newROU_r=r0(rouBef+llAdj);
+        journalEntries.push({year:yr,kind:'Reassessment',typeName:ev.typeName,
+          llBef:llBef,llAft:newLL_r,rouBef:rouBef,rouAft:newROU_r,gainLoss:0,
+          jeLines:[llAdj>=0
+            ?{side:'Dr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj),note:'Remeasurement increase'}
+            :{side:'Dr',acct:'Lease Liability',amt:Math.abs(llAdj),note:'Remeasurement decrease'},
+           llAdj>=0
+            ?{side:'Cr',acct:'Lease Liability',amt:Math.abs(llAdj),note:''}
+            :{side:'Cr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj),note:''}]});
+        ll=newLL_r; rou=newROU_r; curIBR=rRate; curPmt=ev.newPmt; hadEvent=true;
+        curRemTerm=rTerm; curDeprAnn=rTerm>0?r0(newROU_r/rTerm):curDeprAnn;
+        eventLog.push({year:yr,kind:'Reassessment',type:ev.typeName,
+          llAft:ll,rouAft:rou,rate:rRate*100,pmt:ev.newPmt,term:rTerm,gainLoss:0});
+      } else if(ev.kind==='modification'){
+        if(ev.type===1){
+          eventLog.push({year:yr,kind:'Modification',type:ev.typeName,
+            note:'New separate lease created; original unchanged',
+            llAft:ll,rouAft:rou,rate:curIBR*100,pmt:hadEvent?r0(curPmt):r0(ann*Math.pow(1+rr,yr-1)),
+            term:Math.max(0,curRemTerm),gainLoss:0});
+        } else if(ev.type===2){
+          var useTerm2=ev.newTerm>0?ev.newTerm:Math.max(1,curRemTerm); /* fall back to current remaining term if 0 */
+          var newLL_2=pvAnn(ev.newPmt,ev.newIBR,useTerm2);
+          var llAdj2=r0(newLL_2-llBef);
+          var newROU_2=r0(rouBef+llAdj2);
+          journalEntries.push({year:yr,kind:'Modification',typeName:ev.typeName,
+            llBef:llBef,llAft:newLL_2,rouBef:rouBef,rouAft:newROU_2,gainLoss:0,
+            jeLines:[llAdj2>=0
+              ?{side:'Dr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj2),note:'Scope increase — remeasurement'}
+              :{side:'Dr',acct:'Lease Liability',amt:Math.abs(llAdj2),note:'Scope increase — remeasurement'},
+             llAdj2>=0
+              ?{side:'Cr',acct:'Lease Liability',amt:Math.abs(llAdj2),note:''}
+              :{side:'Cr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj2),note:''}]});
+          ll=newLL_2; rou=newROU_2; curIBR=ev.newIBR; curPmt=ev.newPmt; hadEvent=true;
+          curRemTerm=useTerm2; curDeprAnn=useTerm2>0?r0(newROU_2/useTerm2):curDeprAnn;
+          eventLog.push({year:yr,kind:'Modification',type:ev.typeName,llAft:ll,rouAft:rou,rate:ev.newIBR*100,pmt:ev.newPmt,term:useTerm2,gainLoss:0});
+        } else if(ev.type===3){
+          var dec=ev.scopePct;
+          var useTerm3=ev.newTerm>0?ev.newTerm:Math.max(1,curRemTerm); /* fall back to current remaining term if 0 */
+          var remeasLL=pvAnn(ev.newPmt,ev.newIBR,useTerm3);
+          var llDecogn=r0(llBef*dec);
+          var rouDecogn=r0(rouBef*dec);
+          var gainLoss3=r0(llDecogn-rouDecogn);
+          var llAdj3=r0(remeasLL-(llBef-llDecogn));
+          var newROU_3=r0(rouBef-rouDecogn+llAdj3);
+          journalEntries.push({year:yr,kind:'Modification',typeName:ev.typeName+' ('+Math.round(dec*100)+'%)',
+            llBef:llBef,llAft:remeasLL,rouBef:rouBef,rouAft:newROU_3,gainLoss:gainLoss3,
+            jeLines:[
+              {side:'Dr',acct:'Lease Liability',amt:llDecogn,note:'Derecognise '+Math.round(dec*100)+'% of LL'},
+              gainLoss3>=0
+                ?{side:'Cr',acct:'Gain on Lease Modification (P&L)',amt:Math.abs(gainLoss3),note:'Gain recognised in P&L'}
+                :{side:'Dr',acct:'Loss on Lease Modification (P&L)',amt:Math.abs(gainLoss3),note:'Loss recognised in P&L'},
+              {side:'Cr',acct:'Right-of-Use Asset',amt:rouDecogn,note:'Derecognise '+Math.round(dec*100)+'% of ROU'},
+              llAdj3!==0?(llAdj3>0
+                ?{side:'Dr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj3),note:'Remeasure remaining LL upward'}
+                :{side:'Dr',acct:'Lease Liability',amt:Math.abs(llAdj3),note:'Remeasure remaining LL downward'})
+              :null,
+              llAdj3!==0?(llAdj3>0
+                ?{side:'Cr',acct:'Lease Liability',amt:Math.abs(llAdj3),note:''}
+                :{side:'Cr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj3),note:''})
+              :null,
+            ].filter(function(x){return x!==null;})});
+          ll=remeasLL; rou=newROU_3; curIBR=ev.newIBR; curPmt=ev.newPmt; hadEvent=true;
+          curRemTerm=useTerm3; curDeprAnn=useTerm3>0?r0(newROU_3/useTerm3):curDeprAnn;
+          eventLog.push({year:yr,kind:'Modification',type:ev.typeName,llAft:ll,rouAft:rou,rate:ev.newIBR*100,pmt:ev.newPmt,term:useTerm3,gainLoss:gainLoss3});
+        } else if(ev.type===4){
+          var useTerm4=ev.newTerm>0?ev.newTerm:Math.max(1,curRemTerm);
+          var newLL_4=pvAnn(ev.newPmt,ev.newIBR,useTerm4);
+          var llAdj4=r0(newLL_4-llBef);
+          var newROU_4=r0(rouBef+llAdj4);
+          journalEntries.push({year:yr,kind:'Modification',typeName:ev.typeName,
+            llBef:llBef,llAft:newLL_4,rouBef:rouBef,rouAft:newROU_4,gainLoss:0,
+            jeLines:[llAdj4>=0
+              ?{side:'Dr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj4),note:'Payment change — LL increase'}
+              :{side:'Dr',acct:'Lease Liability',amt:Math.abs(llAdj4),note:'Payment change — LL decrease'},
+             llAdj4>=0
+              ?{side:'Cr',acct:'Lease Liability',amt:Math.abs(llAdj4),note:''}
+              :{side:'Cr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj4),note:''}]});
+          ll=newLL_4; rou=newROU_4; curIBR=ev.newIBR; curPmt=ev.newPmt; hadEvent=true;
+          curRemTerm=useTerm4; curDeprAnn=useTerm4>0?r0(newROU_4/useTerm4):curDeprAnn;
+          eventLog.push({year:yr,kind:'Modification',type:ev.typeName,llAft:ll,rouAft:rou,rate:ev.newIBR*100,pmt:ev.newPmt,term:useTerm4,gainLoss:0});
+        } else if(ev.type===5){
+          var useTerm5=ev.newTerm>0?ev.newTerm:Math.max(1,curRemTerm); /* fall back to current remaining term if 0 */
+          var newLL_5=pvAnn(ev.newPmt,ev.newIBR,useTerm5);
+          var llAdj5=r0(newLL_5-llBef);
+          var newROU_5=r0(rouBef+llAdj5);
+          journalEntries.push({year:yr,kind:'Modification',typeName:ev.typeName,
+            llBef:llBef,llAft:newLL_5,rouBef:rouBef,rouAft:newROU_5,gainLoss:0,
+            jeLines:[llAdj5>=0
+              ?{side:'Dr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj5),note:'Term change — LL increase'}
+              :{side:'Dr',acct:'Lease Liability',amt:Math.abs(llAdj5),note:'Term change — LL decrease'},
+             llAdj5>=0
+              ?{side:'Cr',acct:'Lease Liability',amt:Math.abs(llAdj5),note:''}
+              :{side:'Cr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj5),note:''}]});
+          ll=newLL_5; rou=newROU_5; curIBR=ev.newIBR; curPmt=ev.newPmt; hadEvent=true;
+          curRemTerm=useTerm5; curDeprAnn=useTerm5>0?r0(newROU_5/useTerm5):curDeprAnn;
+          eventLog.push({year:yr,kind:'Modification',type:ev.typeName,llAft:ll,rouAft:rou,rate:ev.newIBR*100,pmt:ev.newPmt,term:useTerm5,gainLoss:0});
+        } else {
+          var useTerm6=ev.newTerm>0?ev.newTerm:Math.max(1,curRemTerm);
+          var newLL_6=pvAnn(ev.newPmt,ev.newIBR,useTerm6);
+          var llAdj6=r0(newLL_6-llBef);
+          var newROU_6=r0(rouBef+llAdj6);
+          journalEntries.push({year:yr,kind:'Modification',typeName:ev.typeName,
+            llBef:llBef,llAft:newLL_6,rouBef:rouBef,rouAft:newROU_6,gainLoss:0,
+            jeLines:[llAdj6>=0
+              ?{side:'Dr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj6),note:'Other remeasurement'}
+              :{side:'Dr',acct:'Lease Liability',amt:Math.abs(llAdj6),note:'Other remeasurement'},
+             llAdj6>=0
+              ?{side:'Cr',acct:'Lease Liability',amt:Math.abs(llAdj6),note:''}
+              :{side:'Cr',acct:'Right-of-Use Asset',amt:Math.abs(llAdj6),note:''}]});
+          ll=newLL_6; rou=newROU_6; curIBR=ev.newIBR; curPmt=ev.newPmt; hadEvent=true;
+          curRemTerm=useTerm6; curDeprAnn=useTerm6>0?r0(newROU_6/useTerm6):curDeprAnn;
+          eventLog.push({year:yr,kind:'Modification',type:ev.typeName,llAft:ll,rouAft:rou,rate:ev.newIBR*100,pmt:ev.newPmt,term:useTerm6,gainLoss:0});
+        }
+      }
+    });
+    /* EIR for the year (on post-event opening balance) */
+    var pmtYr=isAdv?0:(hadEvent?r0(curPmt):r0(ann*Math.pow(1+rr,yr-1)));
+    var intYr=r0(ll*curIBR);
+    var prYr=isAdv?0:Math.max(0,pmtYr-intYr);
+    var lbClose=isAdv?r0(ll+intYr):Math.max(0,r0(ll-prYr));
+    var rouClose=Math.max(0,r0(rou-curDeprAnn));
+    schedule.push({yr:sy+yr-1,lbOpen:r0(ll),int:intYr,pmt:isAdv?0:-pmtYr,pr:prYr,
+      lbClose:lbClose,rouOpen:r0(rou),rouClose:rouClose,depr:-curDeprAnn,isAdv:isAdv,
+      isEventYr:isEventYr,evLabel:isEventYr?evs.map(function(e){return e.typeName;}).join(' + '):''});
+    ll=lbClose; rou=rouClose;
+    curRemTerm=Math.max(0,curRemTerm-1);
   }
   /* Arrays for table */
+  var NS=schedule.length;
   var lbOpen=schedule.map(function(s){return s.lbOpen;});
   var intArr=schedule.map(function(s){return s.int;});
   var pmtArr=schedule.map(function(s){return s.pmt;});
   var lbClose=schedule.map(function(s){return s.lbClose;});
-  var curArr=schedule.map(function(s,i){return i<n-1?r0(s.lbOpen*ibr+schedule[i].pr):s.lbClose;});
+  var curArr=schedule.map(function(s,i){return i<NS-1?schedule[i+1].pr:s.lbClose;});
   var ncArr=lbClose.map(function(c,i){return Math.max(0,c-curArr[i]);});
   var rouOpen=schedule.map(function(s){return s.rouOpen;});
   var rouClose=schedule.map(function(s){return s.rouClose;});
-  var deprArr=fill(n,-deprAnn);
-  var plImpact=intArr.map(function(i){return-(Math.abs(i)+deprAnn);});
-  var opLease=pmtArr; // comparator: operating lease would expense full payment
+  var deprArr=schedule.map(function(s){return s.depr;});
+  var plImpact=intArr.map(function(iv,x){return-(Math.abs(iv)+Math.abs(deprArr[x]));});
+  var opLease=pmtArr;
+  var advPmtRow=schedule.map(function(s){return s.isAdv?-advAmt:null;});
+  /* Build table rows */
+  var tRows=[
+    sh('── RIGHT-OF-USE ASSET (IAS 16 method) ─────'),
+    dr('Opening ROU Asset',rouOpen),
+    dr('Initial Recognition (commencement)',[rouInit].concat(zeros(NS-1))),
+  ];
+  if(advEnabled&&advPeriods>0) tRows.push(dr('  └ of which Advance Payments at Inception',[-totalAdvance].concat(zeros(NS-1))));
+  tRows=tRows.concat([
+    dr('Depreciation — Straight-Line',deprArr),
+    tr('Closing ROU Asset',rouClose),
+    pdr('Remaining Life %',rouClose.map(function(c){return rouInit>0?r2(c/rouInit*100):0;})),
+    sh('── LEASE LIABILITY (EIR Amortisation) ──────'),
+    dr('Opening Lease Liability',lbOpen),
+    dr('Interest Accretion at IBR '+a('ibr')+'%',intArr),
+    dr('Lease Payments Made',pmtArr),
+    tr('Closing Lease Liability',lbClose),
+  ]);
+  if(advEnabled&&advPeriods>0) tRows=tRows.concat([
+    sh('── ADVANCE RENTAL SCHEDULE (IFRS 16.26) ────'),
+    dr('Advance Payments at Commencement (prepaid)',[-totalAdvance].concat(zeros(NS-1))),
+    dr('Advance Period Cash Flow (periods 1–'+advPeriods+')',advPmtRow),
+    dr('Note: Liability accretes (no payment) in advance periods',schedule.map(function(s){return s.isAdv?r0(s.int):null;})),
+  ]);
+  tRows=tRows.concat([
+    sh('── BALANCE SHEET — CURRENT/NON-CURRENT ─────'),
+    dr('Current Portion (<12 months)',curArr),
+    dr('Non-Current Portion (>12 months)',ncArr),
+    tr('Total Lease Liability',lbClose),
+    sh('── P&L IMPACT ──────────────────────────────'),
+    dr('Depreciation (Operating Expense)',deprArr),
+    dr('Interest Expense (Finance Cost)',intArr.map(function(i){return -i;})),
+    tr('Total P&L Charge (D&A + Interest)',plImpact),
+    sh('── vs OPERATING LEASE COMPARISON ──────────'),
+    dr('Hypothetical Op. Lease Expense',opLease),
+    dr('IFRS 16 Depreciation',deprArr),
+    dr('IFRS 16 Interest',intArr.map(function(i){return -i;})),
+    dr('Difference (IFRS 16 front-loads cost)',plImpact.map(function(p,i){return p-opLease[i];})),
+    sh('── CASH FLOW STATEMENT ─────────────────────'),
+    dr('Operating CF (nil — payments reclassified)',zeros(NS)),
+    dr('Financing CF — Principal Repayment',pmtArr.map(function(p,i){return p+intArr[i];})),
+    dr('Financing CF — Interest Paid',intArr.map(function(i){return -i;})),
+    tr('Total Financing Outflow',pmtArr),
+    sh('── LESSEE DISCLOSURES (IFRS 16.58) ─────────'),
+    dr('Undiscounted Payments <1yr',schedule.map(function(s){return-s.pmt;})),
+    dr('Undiscounted Payments 1-5yr',schedule.map(function(s,i){return i<4?-s.pmt*3:0;})),
+    dr('Interest Component',intArr),
+  ]);
+  /* Event timeline (only rendered when there are events) */
+  if(eventLog.length>0){
+    tRows.push(sh('── EVENT TIMELINE ─────────────────────────'));
+    tRows.push({label:'⚑ Event (see Modifications Summary below)',
+      values:schedule.map(function(s){return s.isEventYr?s.evLabel:null;}),
+      type:'data',format:'string'});
+    eventLog.forEach(function(ev){
+      var llArr=fill(NS,null); llArr[ev.year-1]=ev.llAft;
+      var rouArr=fill(NS,null); rouArr[ev.year-1]=ev.rouAft;
+      tRows.push(dr('[Yr '+ev.year+'] '+ev.kind+': '+ev.type+' — LL after event',llArr));
+      tRows.push(dr('[Yr '+ev.year+'] '+ev.kind+': '+ev.type+' — ROU after event',rouArr));
+      if(ev.gainLoss!==0){
+        var glArr=fill(NS,null); glArr[ev.year-1]=ev.gainLoss;
+        tRows.push(dr('[Yr '+ev.year+'] Gain/(Loss) on Scope Decrease (P&L)',glArr));
+      }
+    });
+  }
+  /* Journal entries section */
+  tRows.push(sh('── JOURNAL ENTRIES ──────────────────────────'));
+  if(journalEntries.length===0){
+    tRows.push(dr('No modifications/reassessments configured — set mod1Year or reas1Year to activate',fill(NS,null)));
+  } else {
+    journalEntries.forEach(function(je){
+      tRows.push(sh('  ⬛ '+je.kind+': '+je.typeName+' (Year '+je.year+')'));
+      var llAdjArr=fill(NS,null); llAdjArr[je.year-1]=r0(je.llAft-je.llBef);
+      var rouAdjArr=fill(NS,null); rouAdjArr[je.year-1]=r0(je.rouAft-je.rouBef);
+      tRows.push(dr('  Dr/Cr Lease Liability (net adj)',llAdjArr));
+      tRows.push(dr('  Dr/Cr Right-of-Use Asset (net adj)',rouAdjArr));
+      if(je.gainLoss!==0){
+        var glArr2=fill(NS,null); glArr2[je.year-1]=je.gainLoss;
+        tRows.push(dr('  '+(je.gainLoss>0?'Cr ':'Dr ')+'Gain/(Loss) on Modification (P&L)',glArr2));
+      }
+    });
+  }
+  /* Build human-readable JE and event timeline notes */
+  var jeNoteLines=journalEntries.map(function(je){
+    var lines=['Year '+je.year+' | '+je.kind+': '+je.typeName];
+    lines.push('  LL: $'+fmtV(je.llBef)+' → $'+fmtV(je.llAft)+' (adj $'+fmtV(je.llAft-je.llBef)+')');
+    lines.push('  ROU: $'+fmtV(je.rouBef)+' → $'+fmtV(je.rouAft));
+    je.jeLines.forEach(function(jl){lines.push('  '+jl.side+' '+jl.acct+' $'+fmtV(jl.amt)+(jl.note?' ['+jl.note+']':''));});
+    if(je.gainLoss!==0) lines.push('  '+(je.gainLoss>0?'GAIN':'LOSS')+' on modification: $'+fmtV(Math.abs(je.gainLoss)));
+    return lines.join('\n');
+  }).join('\n\n');
+  var tlNoteLines=eventLog.map(function(ev){
+    return 'Year '+ev.year+' | '+ev.kind+' | '+ev.type+' | Rate: '+r2(ev.rate)+'% | Pmt: $'+fmtV(ev.pmt)+' | Rem.Term: '+ev.term+' yrs | LL: $'+fmtV(ev.llAft)+' | ROU: $'+fmtV(ev.rouAft)+(ev.gainLoss?(' | Gain/(Loss): $'+fmtV(ev.gainLoss)):'')+(ev.note?' ['+ev.note+']':'');
+  }).join('\n');
+  var hasGainLoss=journalEntries.some(function(je){return je.gainLoss!==0;});
+  var nEvents=eventLog.length;
+  var advDesc=advEnabled&&advPeriods>0?' | Advance rental: '+advPeriods+' period(s) prepaid ($'+fmtV(totalAdvance)+')':'';
+  var advSummary=advEnabled&&advPeriods>0?' Advance payments of $'+fmtV(totalAdvance)+' made at commencement reduce initial LL; ROU asset includes advance payments per IFRS 16.24(b).':'';
   return {
     modelType:'IFRS 16 — Right-of-Use Asset & Lease Liability',
     ifrsStandard:'IFRS 16',
-    description:'Lessee accounting | IBR '+a('ibr')+'% | '+n+'-year term | Annual payment $'+fmtV(a('annualPmt'))+' | Rent review '+a('rentReview')+'%',
-    currency:'USD', reportingDate:'FY'+(sy+n-1),
+    description:'Lessee accounting | IBR '+a('ibr')+'% | '+n+'-year term | Annual payment $'+fmtV(a('annualPmt'))+' | Rent review '+a('rentReview')+'%'+advDesc+(nEvents>0?' | Events: '+nEvents:''),
+    currency:'USD', reportingDate:'FY'+(sy+NS-1),
     layout:'timeseries',
-    tableHeaders:yHdrs(n,sy),
-    tableRows:[
-      sh('── RIGHT-OF-USE ASSET (IAS 16 method) ─────'),
-      dr('Opening ROU Asset',rouOpen),
-      dr('Initial Recognition (commencement)',[rouInit].concat(zeros(n-1))),
-      dr('Depreciation — Straight-Line',deprArr),
-      tr('Closing ROU Asset',rouClose),
-      pdr('Remaining Life %',rouClose.map(function(c){return r2(c/rouInit*100);})),
-      sh('── LEASE LIABILITY (EIR Amortisation) ──────'),
-      dr('Opening Lease Liability',lbOpen),
-      dr('Interest Accretion at IBR '+a('ibr')+'%',intArr),
-      dr('Lease Payments Made',pmtArr),
-      tr('Closing Lease Liability',lbClose),
-      sh('── BALANCE SHEET — CURRENT/NON-CURRENT ─────'),
-      dr('Current Portion (<12 months)',curArr),
-      dr('Non-Current Portion (>12 months)',ncArr),
-      tr('Total Lease Liability',lbClose),
-      sh('── P&L IMPACT ──────────────────────────────'),
-      dr('Depreciation (Operating Expense)',deprArr),
-      dr('Interest Expense (Finance Cost)',intArr.map(function(i){return -i;})),
-      tr('Total P&L Charge (D&A + Interest)',plImpact),
-      sh('── vs OPERATING LEASE COMPARISON ──────────'),
-      dr('Hypothetical Op. Lease Expense',opLease),
-      dr('IFRS 16 Depreciation',deprArr),
-      dr('IFRS 16 Interest',intArr.map(function(i){return -i;})),
-      dr('Difference (IFRS 16 front-loads cost)',plImpact.map(function(p,i){return p-opLease[i];})),
-      sh('── CASH FLOW STATEMENT ─────────────────────'),
-      dr('Operating CF (nil — payments reclassified)',zeros(n)),
-      dr('Financing CF — Principal Repayment',pmtArr.map(function(p,i){return p+intArr[i];})), // principal only
-      dr('Financing CF — Interest Paid',intArr.map(function(i){return -i;})),
-      tr('Total Financing Outflow',pmtArr),
-      sh('── LESSEE DISCLOSURES (IFRS 16.58) ─────────'),
-      dr('Undiscounted Payments <1yr',schedule.map(function(s){return-s.pmt;})),
-      dr('Undiscounted Payments 1-5yr',schedule.map(function(s,i){return i<4?-s.pmt*3:0;})),
-      dr('Interest Component',intArr),
-    ],
+    tableHeaders:['Line Item'].concat(schedule.map(function(s){return'FY '+s.yr;})),
+    tableRows:tRows,
     assumptions:ASM,
     analysis:{
-      summary:'Initial ROU asset $'+fmtV(rouInit)+' | Lease liability $'+fmtV(liabInit)+' | Annual depreciation $'+fmtV(deprAnn)+'. Interest front-loading means total P&L charge higher in early years than operating lease approach. Total interest over lease term: $'+fmtV(intArr.reduce(function(s,i){return s+i;},0))+'.',
+      summary:'Initial ROU asset $'+fmtV(rouInit)+' | Lease liability $'+fmtV(liabInit)+(advEnabled&&advPeriods>0?' (net of $'+fmtV(totalAdvance)+' advance payments)':'')+' | Annual depreciation $'+fmtV(deprAnn)+'.'+advSummary+(nEvents>0?' Total events: '+nEvents+(hasGainLoss?' — includes scope decrease with P&L gain/loss.':'.'):''),
       keyFindings:[
-        'Initial ROU: $'+fmtV(rouInit)+' = Liability $'+fmtV(liabInit)+' + IDC $'+fmtV(a('idc'))+' − Incentives $'+fmtV(a('incentives')),
+        advEnabled&&advPeriods>0
+          ?'Initial ROU: $'+fmtV(rouInit)+' = Liability $'+fmtV(liabInit)+' + Advance $'+fmtV(totalAdvance)+' + IDC $'+fmtV(a('idc'))+' − Incentives $'+fmtV(a('incentives'))
+          :'Initial ROU: $'+fmtV(rouInit)+' = Liability $'+fmtV(liabInit)+' + IDC $'+fmtV(a('idc'))+' − Incentives $'+fmtV(a('incentives')),
         'Annual depreciation (SL): $'+fmtV(deprAnn)+' | Year 1 interest: $'+fmtV(intArr[0]),
         'EBITDA improves: rent (opex $'+fmtV(Math.abs(a('annualPmt')))+') replaced by D&A+interest (non-EBITDA)',
         'Balance sheet leverage increases by $'+fmtV(liabInit)+' (current+non-current)',
-      ],
+      ].concat(advEnabled&&advPeriods>0?['Advance periods (1–'+advPeriods+'): zero cash outflow; lease liability accretes (interest only) in those periods']:[])
+       .concat(eventLog.map(function(ev){return '[Yr '+ev.year+'] '+ev.kind+': '+ev.type+' | LL $'+fmtV(ev.llAft)+' | ROU $'+fmtV(ev.rouAft)+(ev.gainLoss?' | Gain/(Loss) $'+fmtV(ev.gainLoss):'');})),
       risks:[
         'IBR remeasurement required on modification, extension reassessment, or interest rate benchmark change',
         'Lease term judgement — extension options require probability of exercise assessment',
         'Variable payments (sales-based, usage-based) excluded from liability — expensed as incurred',
-      ],
+      ].concat(advEnabled&&advPeriods>0?['Advance rental: interest accretes in periods 1–'+advPeriods+' on the lower opening LL; ensure advance amount and periods are validated']:[])
+       .concat(nEvents>0?[
+        'Scope decrease (IFRS 16.46(a)): partial de-recognition of ROU and LL — gain/loss to P&L',
+        'Multiple events same date: reassessments applied before modifications per IFRS 16 hierarchy',
+       ]:[]),
       recommendations:[
         'Apply short-term (<12 months) and low-value (<$5,000) practical expedients where eligible',
         'Disclose maturity analysis (undiscounted) with <1yr, 1–5yr, >5yr buckets per IFRS 16.58',
         'Assess IBR at individual lease level unless portfolio approach used (IFRS 16.A)',
-      ],
+      ].concat(nEvents>0?[
+        'Document each event type and basis for remeasurement at modification/reassessment date',
+        'For scope decrease: verify proportional derecognition and recalculate gain/loss independently',
+      ]:[]),
     },
     ifrsNotes:[
       {title:'Initial Measurement (IFRS 16.24–26)',
-       content:'Lease liability = PV of future lease payments discounted at IBR of '+a('ibr')+'% = $'+fmtV(liabInit)+'. ROU asset = lease liability + initial direct costs ($'+fmtV(a('idc'))+') − lease incentives ($'+fmtV(a('incentives'))+') + dismantling ($'+fmtV(a('dismantling'))+') = $'+fmtV(rouInit)+'. Rent review of '+a('rentReview')+'% p.a. applied to subsequent payments.'},
+       content:'Lease liability = PV of future lease payments NOT yet made at commencement, discounted at IBR '+a('ibr')+'% = $'+fmtV(liabInit)+'.'+(advEnabled&&advPeriods>0?' Advance payments of $'+fmtV(totalAdvance)+' ('+advPeriods+' period(s)) are excluded from the LL as they are already paid at commencement (IFRS 16.26). They are included in the ROU asset per IFRS 16.24(b).':'')+' ROU asset = lease liability + advance payments ($'+fmtV(totalAdvance)+') + IDC ($'+fmtV(a('idc'))+') − incentives ($'+fmtV(a('incentives'))+') + dismantling ($'+fmtV(a('dismantling'))+') = $'+fmtV(rouInit)+'.'},
       {title:'Subsequent Measurement (IFRS 16.30–36)',
-       content:'ROU asset: cost model, straight-line depreciation over '+n+' years = $'+fmtV(deprAnn)+'/yr. Lease liability: amortised cost using EIR method at IBR '+a('ibr')+'% — interest accrues on opening balance, payments reduce liability. Year 1 interest: $'+fmtV(intArr[0])+'. Year '+n+' interest: $'+fmtV(intArr[n-1])+' (decreasing as principal repaid).'},
+       content:'ROU asset: cost model, straight-line depreciation over '+n+' years = $'+fmtV(deprAnn)+'/yr. Lease liability: amortised cost using EIR at IBR '+a('ibr')+'%.'+(advEnabled&&advPeriods>0?' During advance periods (1–'+advPeriods+'), no cash outflow occurs — interest accretes on the reduced opening liability. From period '+(advPeriods+1)+' onwards, normal EIR amortisation resumes.':' Year 1 interest: $'+fmtV(intArr[0])+'. Year '+n+' interest: $'+fmtV(intArr[n-1])+'.')},
       {title:'Cash Flow Presentation (IFRS 16.50)',
-       content:'Principal repayment of lease liability classified as financing activity. Interest paid classified per entity policy (financing or operating, consistent with other interest). Depreciation of ROU asset is non-cash. Short-term and low-value lease payments classified as operating outflows.'},
-    ]
+       content:'Principal repayment of lease liability classified as financing activity. Interest paid classified per entity policy.'+(advEnabled&&advPeriods>0?' Advance payments at commencement are financing outflows at inception. In advance periods (1–'+advPeriods+'), no further financing outflow occurs for lease payments.':' Depreciation of ROU asset is non-cash.')},
+    ].concat(nEvents>0?[
+      {title:'IFRS 16.44–46 — Lease Modifications',
+       content:'A modification not treated as a separate lease requires remeasurement of the lease liability using a revised discount rate at the modification date, with a corresponding adjustment to the ROU asset. For scope decreases (IFRS 16.46(a)), carrying amounts of both ROU and LL are reduced proportionally and any difference is recognised in P&L.'},
+      {title:'IFRS 16.40–43 — Reassessment (Not a Modification)',
+       content:'Reassessment is triggered by: (a) options exercised/not exercised contrary to prior assessment; (b) significant events changing option probability; (c) index/rate changes. For index/rate changes the original IBR is retained (IFRS 16.42). For all other reassessments the revised IBR at reassessment date is used.'},
+      journalEntries.length>0?{title:'Journal Entries Log',content:jeNoteLines}:null,
+      eventLog.length>0?{title:'Event Timeline',content:tlNoteLines}:null,
+    ].filter(Boolean):[]),
   };
 }
 
@@ -1385,7 +1715,7 @@ function computeIFRS18(n,sy){
   var oth=rpt(n,function(i){return r0(a('otherInc1')*Math.pow(1.04,i));});
   var ebit=gp.map(function(g,i){return g+dist[i]+adm[i]+rd[i]+oth[i];});
   var da=rev.map(function(r){return-r0(r*0.05);}); // depreciation proxy
-  var ebitda=ebit.map(function(e,i){return e+da[i];}); // EBITDA = EBIT + D&A (da is positive)
+  var ebitda=ebit.map(function(e,i){return e-da[i];}); // EBITDA = EBIT + |D&A| (da is negative, so subtract)
   var finc=rpt(n,function(i){return r0(a('finInc1')*Math.pow(1.03,i));});
   var fcst=rpt(n,function(i){return-r0(a('finCost1')*Math.pow(0.97,i));});
   var assoc=rpt(n,function(i){return r0(a('assocPft1')*Math.pow(1.05,i));});
@@ -1505,7 +1835,7 @@ function buildIAS16(p){
    CAP: cumulative accumulated depreciation never exceeds (GrossAsset - RV).
 ════════════════════════════════════════════════════════════════════ */
 function computeIAS16(n,sy){
-  var cost=a('assetCost'), rv=a('residual'), life=a('usefulLife');
+  var cost=a('assetCost'), rv=a('residual'), life=Math.max(1,a('usefulLife')); /* Guard: life >= 1 */
   var add=a('additionsY1'), imp=a('impairY3'), bc=a('borrowCost');
   var meth=Math.round(a('deprMethod'))||1; // 1=SL 2=RB 3=MH
   var rbRate=a('rbRate')/100;
@@ -1995,16 +2325,21 @@ function computeIAS36(n,sy){
   var df=rpt(n,function(i){return r2(1/Math.pow(1+wacc,i+1));});
   var pvFcf=fcf.map(function(f,i){return r0(f*df[i]);});
   var sumPV=pvFcf.reduce(function(s,v){return s+v;},0);
-  var tv=r0(fcf[n-1]*(1+tgr)/(wacc-tgr));
+  /* Guard: require WACC > TGR by at least 0.1% to avoid division by zero */
+  var tvDenom=Math.max(wacc-tgr,0.001);
+  var tv=r0(fcf[n-1]*(1+tgr)/tvDenom);
   var pvTV=r0(tv*df[n-1]);
   var viu=sumPV+pvTV;
   var ra=Math.max(viu,a('fvlcts'));
   var ca=a('carrying');
   var impLoss=Math.max(0,ca-ra);
   var headroom=Math.max(0,ra-ca);
-  var tvPct=r2(pvTV/viu*100);
+  /* Guard: avoid divide-by-zero when viu = 0 */
+  var tvPct=viu!==0?r2(pvTV/viu*100):0;
   /* Build sparse arrays: only last column populated for summary items */
   function sp(v){var a2=fill(n,null);a2[n-1]=v;return a2;}
+  /* Guard sensitivity denominators */
+  var sd1=Math.max((wacc+0.01)-tgr,0.001), sd2=Math.max((wacc-0.01)-tgr,0.001);
   return {
     modelType:'IAS 36 — Impairment Test (Value in Use)',
     ifrsStandard:'IAS 36',
@@ -2016,7 +2351,8 @@ function computeIAS36(n,sy){
       sh('── CASH FLOW PROJECTIONS ───────────────────'),
       dr('Revenue',rev),
       dr('EBITDA',ebitda),
-      pdr('EBITDA Margin %',ebitda.map(function(e,i){return r2(e/rev[i]*100);})),
+      /* Guard: avoid divide-by-zero when rev = 0 */
+      pdr('EBITDA Margin %',ebitda.map(function(e,i){return rev[i]!==0?r2(e/rev[i]*100):0;})),
       dr('Depreciation & Amortisation',da.map(function(d){return-d;})),
       tr('EBIT',ebit),
       dr('Tax on EBIT ('+a('taxRate')+'%)',tax.map(function(t){return-t;})),
@@ -2040,9 +2376,9 @@ function computeIAS36(n,sy){
       dr('Carrying Amount of CGU',sp(ca)),
       tr(impLoss>0?'⚠ Impairment Loss Required':'✓ Headroom (No Impairment Required)',sp(impLoss>0?-impLoss:headroom)),
       sh('── SENSITIVITY ANALYSIS ────────────────────'),
-      dr('VIU if WACC +1% → '+(a('wacc')+1)+'%',sp(r0(npv(wacc+0.01,fcf)+fcf[n-1]*(1+tgr)/((wacc+0.01)-tgr)/Math.pow(1+wacc+0.01,n)))),
-      dr('VIU if WACC −1% → '+(a('wacc')-1)+'%',sp(r0(npv(wacc-0.01,fcf)+fcf[n-1]*(1+tgr)/((wacc-0.01)-tgr)/Math.pow(1+wacc-0.01,n)))),
-      dr('VIU if Rev. Growth −1% p.a.',sp(r0(npv(wacc,fcf.map(function(f,i){return f*Math.pow(0.99,i+1);})))+(fcf[n-1]*Math.pow(0.99,n)*(1+tgr)/(wacc-tgr))*df[n-1])),
+      dr('VIU if WACC +1% → '+(a('wacc')+1)+'%',sp(r0(npv(wacc+0.01,fcf)+fcf[n-1]*(1+tgr)/sd1/Math.pow(1+wacc+0.01,n)))),
+      dr('VIU if WACC −1% → '+(a('wacc')-1)+'%',sp(r0(npv(wacc-0.01,fcf)+fcf[n-1]*(1+tgr)/sd2/Math.pow(1+wacc-0.01,n)))),
+      dr('VIU if Rev. Growth −1% p.a.',sp(r0(npv(wacc,fcf.map(function(f,i){return f*Math.pow(0.99,i+1);})))+(fcf[n-1]*Math.pow(0.99,n)*(1+tgr)/tvDenom)*df[n-1])),
     ],
     assumptions:ASM,
     analysis:{
@@ -2211,7 +2547,7 @@ function buildIAS38(p){
   return computeIAS38(n,sy);
 }
 function computeIAS38(n,sy){
-  var base=a('intangCost'), life=a('usefulLife'), dev=a('devCapAnn'), res=a('researchExp');
+  var base=a('intangCost'), life=Math.max(1,a('usefulLife')), dev=a('devCapAnn'), res=a('researchExp'); /* Guard: life >= 1 */
   var annAmort=r0(base/life);
   var openCost=[], addArr=[], closeCost=[], openAcc=[], amortArr=[], closeAcc=[], nbv=[], totInt=[];
   var cumCost=base, cumAcc=0;
@@ -2228,7 +2564,8 @@ function computeIAS38(n,sy){
     nbv.push(nbvI);
     totInt.push(nbvI+a('goodwill'));
   }
-  var capRate=r2(dev/(dev+res)*100);
+  /* Guard: avoid divide-by-zero when dev + res = 0 */
+  var capRate=(dev+res)!==0?r2(dev/(dev+res)*100):0;
   return {
     modelType:'IAS 38 — Intangible Assets',
     ifrsStandard:'IAS 38',
@@ -2820,128 +3157,266 @@ function computeIFRS7(n,sy){
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   MODEL 14: DCF Valuation
+   MODEL 14: DCF Valuation — Damodaran / Big 4 Grade UFCF Model
+   Features: year-by-year revenue growth & EBITDA margins, CAPM WACC,
+   Gordon Growth or Exit Multiple TV, full equity bridge, sensitivity
 ═══════════════════════════════════════════════════════════════════════ */
 function buildDCF(p){
   var n=parseYrs(p), sy=parseSY(p);
   freshASM({
-    rev1:        {label:'Revenue Year 1',              value:50000000, unit:'USD'},
-    revGrowth:   {label:'Revenue Growth Rate',         value:18,       unit:'%'},
-    ebitdaMgn:   {label:'EBITDA Margin Year 1',        value:20,       unit:'%'},
-    mgnExpansion:{label:'Margin Expansion /yr (pp)',   value:1.0,      unit:'pp'},
-    daRatio:     {label:'D&A % Revenue',               value:4,        unit:'%'},
-    taxRate:     {label:'Tax Rate',                    value:28,       unit:'%'},
-    capexRatio:  {label:'CapEx % Revenue',             value:7,        unit:'%'},
-    wcRatio:     {label:'Working Capital Change % Rev',value:2,        unit:'%'},
-    wacc:        {label:'WACC',                        value:11.5,     unit:'%'},
-    tgr:         {label:'Terminal Growth Rate',        value:3.0,      unit:'%'},
-    netDebt:     {label:'Net Debt (Cash)',             value:8500000,  unit:'USD'},
-    shares:      {label:'Shares Outstanding',          value:5000000,  unit:''},
-    startYear:   {label:'Start Year',                  value:sy,       unit:''},
+    /* ── Revenue Build-Up ─────────────────────────────────────────── */
+    baseRevenue:      {label:'Base Revenue — Year 0 (USD)',        value:50000000, unit:'USD'},
+    revGrowthY1:      {label:'Revenue Growth Rate — Year 1',       value:20.0,     unit:'%'},
+    revGrowthY2:      {label:'Revenue Growth Rate — Year 2',       value:17.0,     unit:'%'},
+    revGrowthY3:      {label:'Revenue Growth Rate — Year 3',       value:14.0,     unit:'%'},
+    revGrowthY4:      {label:'Revenue Growth Rate — Year 4',       value:11.0,     unit:'%'},
+    revGrowthY5:      {label:'Revenue Growth Rate — Year 5+',      value:9.0,      unit:'%'},
+    /* ── EBITDA Margins per Year (allows expansion / compression) ── */
+    ebitdaMgnY1:      {label:'EBITDA Margin — Year 1',             value:18.0,     unit:'%'},
+    ebitdaMgnY2:      {label:'EBITDA Margin — Year 2',             value:19.5,     unit:'%'},
+    ebitdaMgnY3:      {label:'EBITDA Margin — Year 3',             value:21.0,     unit:'%'},
+    ebitdaMgnY4:      {label:'EBITDA Margin — Year 4',             value:22.0,     unit:'%'},
+    ebitdaMgnY5:      {label:'EBITDA Margin — Year 5+',            value:23.0,     unit:'%'},
+    /* ── FCF Build Drivers ──────────────────────────────────────── */
+    daPercent:        {label:'D&A % Revenue',                      value:4.0,      unit:'%'},
+    capexPercent:     {label:'CapEx % Revenue',                    value:7.0,      unit:'%'},
+    nwcPercent:       {label:'Δ NWC % of ΔRevenue',                value:15.0,     unit:'%'},
+    /* ── WACC — CAPM Components ─────────────────────────────────── */
+    riskFreeRate:     {label:'Risk-Free Rate — Rf',                value:4.5,      unit:'%'},
+    equityRiskPremium:{label:'Equity Risk Premium — ERP',          value:5.5,      unit:'%'},
+    beta:             {label:'Levered Beta (β)',                   value:1.10,     unit:'x'},
+    costOfDebt:       {label:'Pre-Tax Cost of Debt — Kd',          value:6.0,      unit:'%'},
+    taxRate:          {label:'Corporate Tax Rate',                 value:28.0,     unit:'%'},
+    debtWeight:       {label:'Debt Weight — D/(D+E)',              value:30.0,     unit:'%'},
+    waccOverride:     {label:'WACC Override — 0 = auto (CAPM)',    value:0.0,      unit:'%'},
+    /* ── Terminal Value ─────────────────────────────────────────── */
+    tgr:              {label:'Terminal Growth Rate (g)',            value:3.0,      unit:'%'},
+    terminalMethod:   {label:'Terminal Method — 1=Gordon 2=Exit',  value:1,        unit:''},
+    exitMultiple:     {label:'EV/EBITDA Exit Multiple',            value:12.0,     unit:'x'},
+    /* ── Equity Bridge ──────────────────────────────────────────── */
+    totalDebt:        {label:'Total Debt',                         value:15000000, unit:'USD'},
+    cash:             {label:'Cash & Equivalents',                 value:6500000,  unit:'USD'},
+    minorityInterest: {label:'Minority Interest',                  value:0,        unit:'USD'},
+    sharesOutstanding:{label:'Diluted Shares Outstanding',         value:5000000,  unit:''},
+    currentSharePrice:{label:'Current Market Price (USD)',         value:10.00,    unit:'USD'},
+    startYear:        {label:'Start Year',                         value:sy,       unit:''},
   });
   return computeDCF(n,sy);
 }
 function computeDCF(n,sy){
-  var wacc=a('wacc')/100, tgr=a('tgr')/100;
-  /* Revenue: i=0 is Year1=rev1, i=1 is Year2=rev1*(1+g), etc. */
-  var rev=rpt(n,function(i){return r0(a('rev1')*Math.pow(1+a('revGrowth')/100,i));});
-  /* EBITDA margin expands each year */
-  var ebitda=rpt(n,function(i){var mgn=Math.min(a('ebitdaMgn')+i*a('mgnExpansion'),80);return r0(rev[i]*mgn/100);});
-  var da=rev.map(function(r){return r0(r*a('daRatio')/100);});
-  var ebit=ebitda.map(function(e,i){return e-da[i];});
-  var tax=ebit.map(function(e){return r0(e>0?e*a('taxRate')/100:0);});
-  var nopat=ebit.map(function(e,i){return e-tax[i];});
-  /* CapEx and WC are cash outflows (negative) */
-  var capex=rev.map(function(r){return-r0(r*a('capexRatio')/100);});
-  var wc=rev.map(function(r){return-r0(r*a('wcRatio')/100);});
-  /* FCFF = NOPAT + D&A (add back) + CapEx (negative) + delta WC (negative) */
-  var fcff=nopat.map(function(n2,i){return n2+da[i]+capex[i]+wc[i];});
-  /* Discount factor: year i gets discounted at (1+WACC)^(i+1) */
-  var df=rpt(n,function(i){return r2(1/Math.pow(1+wacc,i+1));});
-  var pvFcff=fcff.map(function(f,i){return r0(f*df[i]);});
-  /* Sum all PV(FCFF) years */
-  var sumPV=pvFcff.reduce(function(s,v){return s+v;},0);
-  /* Terminal Value: Gordon Growth, discounted at year-n factor */
-  var tv=r0(fcff[n-1]*(1+tgr)/(wacc-tgr));
-  var pvTV=r0(tv*df[n-1]);
-  var ev=r0(sumPV+pvTV);
-  var equity=ev-a('netDebt');
-  var price=r2(equity/a('shares'));
-  var ebitdaMgn=ebitda.map(function(e,i){return r2(e/rev[i]*100);});
-  function sp(v){var a2=fill(n,null);a2[n-1]=v;return a2;}
-  /* Sensitivity: WACC ±1%, TGR ±0.5% */
-  var evHiWacc=r0(npv(wacc+0.01,fcff)+fcff[n-1]*(1+tgr)/((wacc+0.01)-tgr)/Math.pow(1+wacc+0.01,n));
-  var evLoWacc=r0(npv(wacc-0.01,fcff)+fcff[n-1]*(1+tgr)/((wacc-0.01)-tgr)/Math.pow(1+wacc-0.01,n));
-  var evHiTgr =r0(npv(wacc,fcff)+fcff[n-1]*(1+tgr+0.005)/(wacc-(tgr+0.005))*df[n-1]);
-  var evLoTgr =r0(npv(wacc,fcff)+fcff[n-1]*(1+tgr-0.005)/(wacc-(tgr-0.005))*df[n-1]);
+  var tgr=a('tgr')/100;
+
+  /* ── WACC: auto-calculate from CAPM or use override ─────────────── */
+  var ke   = a('riskFreeRate')/100 + a('beta') * (a('equityRiskPremium')/100);
+  var kdAt = a('costOfDebt')/100 * (1 - a('taxRate')/100);   /* after-tax Kd */
+  var wd   = Math.min(Math.max(a('debtWeight')/100, 0), 1);
+  var we   = 1 - wd;
+  var waccCalc = ke * we + kdAt * wd;
+  var wacc = a('waccOverride') > 0 ? a('waccOverride')/100 : waccCalc;
+  var keDisp   = r2(ke   * 100);
+  var kdAtDisp = r2(kdAt * 100);
+  var waccDisp = r2(wacc * 100);
+
+  /* ── Revenue Build (year-by-year growth rates) ───────────────────── */
+  var gRates = [
+    a('revGrowthY1')/100, a('revGrowthY2')/100, a('revGrowthY3')/100,
+    a('revGrowthY4')/100, a('revGrowthY5')/100
+  ];
+  function gRate(i){ return i < 5 ? gRates[i] : gRates[4]; }
+
+  var rev = rpt(n, function(i){
+    var r = a('baseRevenue');
+    for(var j = 0; j <= i; j++) r = r * (1 + gRate(j));
+    return r0(r);
+  });
+  var revGrowthPct = rpt(n, function(i){ return r2(gRate(i) * 100); });
+
+  /* ── EBITDA (per-year margins) ────────────────────────────────────── */
+  var mgnRates = [
+    a('ebitdaMgnY1')/100, a('ebitdaMgnY2')/100, a('ebitdaMgnY3')/100,
+    a('ebitdaMgnY4')/100, a('ebitdaMgnY5')/100
+  ];
+  function mgnRate(i){ return i < 5 ? mgnRates[i] : mgnRates[4]; }
+
+  var ebitda    = rpt(n, function(i){ return r0(rev[i] * mgnRate(i)); });
+  var ebitdaPct = ebitda.map(function(e,i){ return rev[i] !== 0 ? r2(e/rev[i]*100) : 0; });
+
+  /* ── D&A, EBIT ────────────────────────────────────────────────────── */
+  var da      = rev.map(function(r){ return r0(r * a('daPercent')/100); });
+  var ebit    = ebitda.map(function(e,i){ return e - da[i]; });
+  var ebitPct = ebit.map(function(e,i){ return rev[i] !== 0 ? r2(e/rev[i]*100) : 0; });
+
+  /* ── Taxes on EBIT → NOPAT ────────────────────────────────────────── */
+  var taxOnEbit = ebit.map(function(e){ return r0(e > 0 ? e * a('taxRate')/100 : 0); });
+  var nopat     = ebit.map(function(e,i){ return e - taxOnEbit[i]; });
+
+  /* ── CapEx (outflow) ──────────────────────────────────────────────── */
+  var capex = rev.map(function(r){ return -r0(r * a('capexPercent')/100); });
+
+  /* ── Δ NWC (outflow when revenue rises) ──────────────────────────── */
+  var deltaNWC = rpt(n, function(i){
+    var prevRev  = i === 0 ? a('baseRevenue') : rev[i-1];
+    var deltaRev = rev[i] - prevRev;
+    return -r0(deltaRev * a('nwcPercent')/100);
+  });
+
+  /* ── Unlevered FCF: NOPAT + D&A − CapEx − ΔNWC ──────────────────── */
+  var ufcf = nopat.map(function(np,i){ return np + da[i] + capex[i] + deltaNWC[i]; });
+
+  /* ── Discounting ──────────────────────────────────────────────────── */
+  var df       = rpt(n, function(i){ return r4(1 / Math.pow(1 + wacc, i + 1)); });
+  var pvUfcf   = ufcf.map(function(f,i){ return r0(f * df[i]); });
+  var sumPvUfcf = pvUfcf.reduce(function(s,v){ return s+v; }, 0);
+
+  /* ── Terminal Value ───────────────────────────────────────────────── */
+  /* Guard: clamp WACC−g to 0.1% minimum to prevent Infinity */
+  var tvDenomRaw = wacc - tgr;
+  var tvDenomClamped = tvDenomRaw < 0.001;
+  var tvDenom   = Math.max(tvDenomRaw, 0.001);
+  var tvGordon  = r0(ufcf[n-1] * (1 + tgr) / tvDenom);
+  var tvExit    = r0(ebitda[n-1] * a('exitMultiple'));
+  var useExit   = Math.round(a('terminalMethod')) === 2;
+  var tv        = useExit ? tvExit : tvGordon;
+  /* Guard: negative TV → clamp to 0 */
+  var tvNegative = tv < 0;
+  tv = Math.max(tv, 0);
+  var tvWarning = tvNegative ? ' ⚠ TV was negative — clamped to 0' :
+                 (tvDenomClamped ? ' ⚠ WACC−g < 0.1% — denominator clamped to 0.001' : '');
+
+  var pvTV      = r0(tv * df[n-1]);
+  var ev        = r0(sumPvUfcf + pvTV);
+  var tvPctEV   = ev !== 0 ? r2(pvTV / ev * 100) : 0;
+
+  /* ── Equity Bridge ────────────────────────────────────────────────── */
+  var equityValue  = ev - a('totalDebt') + a('cash') - a('minorityInterest');
+  var shares       = a('sharesOutstanding');
+  /* Guard: avoid divide-by-zero when shares = 0 */
+  var impliedPrice = shares > 0 ? r2(equityValue / shares) : 0;
+  var currPrice    = a('currentSharePrice');
+  /* Guard: avoid divide-by-zero when currPrice = 0 */
+  var upside       = currPrice > 0 ? r2((impliedPrice / currPrice - 1) * 100) : 0;
+
+  /* ── Helper: single-value in last column ────────────────────────── */
+  function sp(v){ var a2=fill(n,null); a2[n-1]=v; return a2; }
+
+  /* ── Sensitivity: 3×3 implied share price matrix (WACC × TGR) ───── */
+  function priceAt(w, g){
+    var d   = Math.max(w - g, 0.001);
+    var pvF = ufcf.reduce(function(s,f,i){ return s + f/Math.pow(1+w,i+1); }, 0);
+    var tvA = useExit ? tvExit : Math.max(r0(ufcf[n-1]*(1+g)/d), 0);
+    var pvTvA = tvA / Math.pow(1+w, n);
+    var evA = pvF + pvTvA;
+    var eqA = evA - a('totalDebt') + a('cash') - a('minorityInterest');
+    return shares > 0 ? r2(eqA / shares) : 0;
+  }
+  var wLo = wacc - 0.01, wMid = wacc, wHi = wacc + 0.01;
+  var gLo = tgr  - 0.005, gMid = tgr, gHi = tgr + 0.005;
+  /* clamp g steps to avoid WACC−g ≤ 0 */
+  gLo = Math.min(gLo, wLo - 0.001);
+  gMid= Math.min(gMid, wMid - 0.001);
+  gHi = Math.min(gHi, wHi - 0.001);
+  var sens = [
+    [priceAt(wHi,gHi), priceAt(wHi,gMid), priceAt(wHi,gLo)],
+    [priceAt(wMid,gHi),priceAt(wMid,gMid),priceAt(wMid,gLo)],
+    [priceAt(wLo,gHi), priceAt(wLo,gMid), priceAt(wLo,gLo)],
+  ];
+  function sensRow(label, vals){ return '  '+label+': $'+vals[0]+' / $'+vals[1]+' / $'+vals[2]; }
+  var sensText = 'Implied Share Price | TGR '+r2(gHi*100)+'% / '+r2(gMid*100)+'% / '+r2(gLo*100)+'%\n'+
+    sensRow('WACC '+r2(wHi*100)+'% (High)',sens[0])+'\n'+
+    sensRow('WACC '+r2(wMid*100)+'% (Base)',sens[1])+'\n'+
+    sensRow('WACC '+r2(wLo*100)+'% (Low)',sens[2]);
+
+  /* ── Sensitivity table rows (EV at ±WACC / ±TGR) ────────────────── */
+  var evHiWacc = r0(ufcf.reduce(function(s,f,i){return s+f/Math.pow(1+wHi,i+1);},0) +
+    Math.max(ufcf[n-1]*(1+tgr)/Math.max(wHi-tgr,0.001),0)/Math.pow(1+wHi,n));
+  var evLoWacc = r0(ufcf.reduce(function(s,f,i){return s+f/Math.pow(1+wLo,i+1);},0) +
+    Math.max(ufcf[n-1]*(1+tgr)/Math.max(wLo-tgr,0.001),0)/Math.pow(1+wLo,n));
+  var evHiTgr  = r0(sumPvUfcf + Math.max(ufcf[n-1]*(1+gHi)/Math.max(wacc-gHi,0.001),0)*df[n-1]);
+  var evLoTgr  = r0(sumPvUfcf + Math.max(ufcf[n-1]*(1+gLo)/Math.max(wacc-gLo,0.001),0)*df[n-1]);
+
   return {
-    modelType:'DCF — Discounted Cash Flow Valuation',
+    modelType:'DCF — Discounted Cash Flow (Damodaran UFCF)',
     ifrsStandard:'DCF / Valuation',
-    description:'FCFF-based DCF | WACC '+a('wacc')+'% | TGR '+a('tgr')+'% | '+n+' yrs | EV $'+fmtV(ev)+' | Equity $'+fmtV(equity),
+    description:'UFCF DCF | WACC '+waccDisp+'% | TGR '+a('tgr')+'% | '+n+' yrs | EV $'+fmtV(ev)+' | Equity $'+fmtV(equityValue)+' | Price $'+impliedPrice+(a('waccOverride')>0?' [WACC Override]':''),
     currency:'USD', reportingDate:'FY'+(sy+n-1),
     layout:'timeseries',
     tableHeaders:yHdrs(n,sy),
     tableRows:[
-      sh('── INCOME STATEMENT ────────────────────────'),
+      sh('── INCOME STATEMENT BUILD ─────────────────────────────────────'),
       dr('Revenue',rev),
+      pdr('Revenue Growth %',revGrowthPct),
       dr('EBITDA',ebitda),
-      pdr('EBITDA Margin %',ebitdaMgn),
-      dr('Depreciation & Amortisation',da.map(function(d){return-d;})),
+      pdr('EBITDA Margin %',ebitdaPct),
+      dr('(-) Depreciation & Amortisation (D&A)',da.map(function(d){return -d;})),
       tr('EBIT',ebit),
-      dr('Tax on EBIT ('+a('taxRate')+'%)',tax.map(function(t){return-t;})),
-      tr('NOPAT',nopat),
-      sh('── FREE CASH FLOW TO FIRM (FCFF) ──────────'),
-      dr('Add: D&A (non-cash)',da),
-      dr('Less: Capital Expenditure',capex),
-      dr('Less: Working Capital Increase',wc),
-      tr('Free Cash Flow to Firm (FCFF)',fcff),
-      pdr('FCFF Margin %',fcff.map(function(f,i){return r2(f/rev[i]*100);})),
-      sh('── DISCOUNTING ─────────────────────────────'),
-      dr('Discount Factor (WACC='+a('wacc')+'%)',df),
-      dr('PV of FCFF',pvFcff),
-      sh('── ENTERPRISE VALUE BUILD-UP ───────────────'),
-      dr('Sum of PV(FCFF)',sp(sumPV)),
-      dr('Terminal Value — Undiscounted (Gordon)',sp(tv)),
+      pdr('EBIT Margin %',ebitPct),
+      dr('(-) Taxes on EBIT ('+a('taxRate')+'%)',taxOnEbit.map(function(t){return -t;})),
+      tr('NOPAT (Net Operating Profit after Tax)',nopat),
+      sh('── UNLEVERED FREE CASH FLOW (UFCF) BUILD ─────────────────────'),
+      dr('(+) Add Back D&A',da),
+      dr('(-) Capital Expenditure',capex),
+      dr('(-) Change in Net Working Capital',deltaNWC),
+      tr('= Unlevered Free Cash Flow (UFCF)',ufcf),
+      pdr('UFCF Margin %',ufcf.map(function(f,i){return rev[i]!==0?r2(f/rev[i]*100):0;})),
+      sh('── DISCOUNTING ────────────────────────────────────────────────'),
+      dr('Discount Factor  [1/(1+WACC)^t]  WACC='+waccDisp+'%',df),
+      dr('PV of UFCF',pvUfcf),
+      sh('── ENTERPRISE VALUE BUILD-UP ──────────────────────────────────'),
+      dr('Sum of PV(UFCF)',sp(sumPvUfcf)),
+      dr('Terminal Value — '+(useExit?'Exit Multiple ('+a('exitMultiple')+'× EBITDA)':'Gordon Growth Model')+(tvWarning||''),sp(tv)),
       dr('PV of Terminal Value',sp(pvTV)),
-      pdr('Terminal Value as % of EV',sp(r2(pvTV/ev*100))),
+      pdr('Terminal Value as % of Enterprise Value',sp(tvPctEV)),
       tr('Enterprise Value (EV)',sp(ev)),
-      sh('── EQUITY VALUE ─────────────────────────────'),
-      dr('Less: Net Debt / (Plus: Net Cash)',sp(-a('netDebt'))),
-      tr('Equity Value',sp(equity)),
-      tr('Implied Share Price (USD)',sp(price)),
-      sh('── SENSITIVITY ANALYSIS ────────────────────'),
-      dr('EV if WACC +'+(a('wacc')+1)+'%',sp(evHiWacc)),
-      dr('EV if WACC −'+(a('wacc')-1)+'%',sp(evLoWacc)),
-      dr('EV if TGR +'+(a('tgr')+0.5)+'%',sp(evHiTgr)),
-      dr('EV if TGR −'+(a('tgr')-0.5)+'%',sp(evLoTgr)),
+      sh('── EQUITY VALUE BRIDGE ─────────────────────────────────────────'),
+      dr('(-) Total Debt',sp(-a('totalDebt'))),
+      dr('(+) Cash & Equivalents',sp(a('cash'))),
+      dr('(-) Minority Interest',sp(-a('minorityInterest'))),
+      tr('= Equity Value',sp(equityValue)),
+      dr('Diluted Shares Outstanding',sp(shares)),
+      tr('Implied Share Price (USD)',sp(impliedPrice)),
+      dr('Current Market Price (USD)',sp(currPrice)),
+      pdr('Upside / (Downside) %',sp(upside)),
+      sh('── SENSITIVITY — EV at ±WACC / ±TGR ──────────────────────────'),
+      dr('EV @ WACC +'+(r2((wHi-wacc)*100))+'% = '+r2(wHi*100)+'%',sp(evHiWacc)),
+      dr('EV @ WACC −'+(r2((wacc-wLo)*100))+'% = '+r2(wLo*100)+'%',sp(evLoWacc)),
+      dr('EV @ TGR +'+(r2((gHi-tgr)*100))+'% = '+r2(gHi*100)+'%',sp(evHiTgr)),
+      dr('EV @ TGR −'+(r2((tgr-gLo)*100))+'% = '+r2(gLo*100)+'%',sp(evLoTgr)),
     ],
     assumptions:ASM,
     analysis:{
-      summary:'EV of $'+fmtV(ev)+'. Equity value $'+fmtV(equity)+'. Implied share price $'+price+'. Terminal value is '+r2(pvTV/ev*100)+'% of EV.',
+      summary:'EV $'+fmtV(ev)+' | Equity $'+fmtV(equityValue)+' | Implied price $'+impliedPrice+' vs current $'+currPrice+' → '+(upside>=0?'+':'')+upside+'% '+(upside>=0?'upside':'downside')+'. TV = '+tvPctEV+'% of EV.',
       keyFindings:[
-        'EV: $'+fmtV(ev)+' | Equity: $'+fmtV(equity)+' | Share price: $'+price,
-        'Revenue CAGR '+a('revGrowth')+'% to $'+fmtV(rev[n-1])+' | EBITDA margin '+a('ebitdaMgn')+'% → '+(a('ebitdaMgn')+n*a('mgnExpansion'))+'%',
-        'PV(FCFF): $'+fmtV(sumPV)+' ('+r2(sumPV/ev*100)+'%) + PV(TV): $'+fmtV(pvTV)+' ('+r2(pvTV/ev*100)+'%)',
-        'WACC +1% → EV $'+fmtV(evHiWacc)+' (-$'+fmtV(ev-evHiWacc)+') | WACC -1% → EV $'+fmtV(evLoWacc),
+        'Ke (CAPM) = '+a('riskFreeRate')+'% + '+a('beta')+'x × '+a('equityRiskPremium')+'% = '+keDisp+'% | After-tax Kd = '+a('costOfDebt')+'%×(1−'+a('taxRate')+'%) = '+kdAtDisp+'%',
+        'WACC = '+keDisp+'%×'+r2(we*100)+'% + '+kdAtDisp+'%×'+r2(wd*100)+'% = '+waccDisp+'%'+(a('waccOverride')>0?' [Manual override: '+a('waccOverride')+'%]':''),
+        'EV $'+fmtV(ev)+' | PV(UFCF) $'+fmtV(sumPvUfcf)+' ('+r2(ev!==0?sumPvUfcf/ev*100:0)+'%) + PV(TV) $'+fmtV(pvTV)+' ('+tvPctEV+'%)',
+        'Implied price $'+impliedPrice+' | Current price $'+currPrice+' | '+(upside>=0?'Upside':'Downside')+' '+(upside>=0?'+':'')+upside+'%',
       ],
       risks:[
-        'TV = '+r2(pvTV/ev*100)+'% of EV — model heavily dependent on terminal assumptions',
-        'Revenue growth and margin assumptions are primary value drivers',
-        'WACC estimation uncertainty: beta, ERP, and capital structure assumptions',
+        'TV = '+tvPctEV+'% of EV — highly sensitive to terminal growth rate and WACC assumptions',
+        'Year-by-year revenue growth (Y1: '+a('revGrowthY1')+'% → Y5: '+a('revGrowthY5')+'%) and margins are primary value drivers',
+        'WACC = '+waccDisp+'%: Beta ('+a('beta')+'x), ERP ('+a('equityRiskPremium')+'%), Rf ('+a('riskFreeRate')+'%) are all unobservable inputs',
+        (tvWarning ? tvWarning : 'WACC−g spread = '+r2((wacc-tgr)*100)+'bp — adequate buffer but monitor if growth assumptions change'),
       ],
       recommendations:[
-        'Build WACC×TGR sensitivity matrix: 5×5 grid of EV outcomes',
-        'Cross-check: EV/EBITDA multiple implied = '+r2(ev/ebitda[n-1])+'× (Year '+n+' EBITDA)',
-        'Bear/base/bull case: -5%/-0%/+5% revenue growth stress',
+        'Run 3×3 WACC×TGR sensitivity: see notes section for implied share price matrix',
+        'Cross-check implied EV/EBITDA: '+(ebitda[n-1]!==0?r2(ev/ebitda[n-1]):0)+'× Year-'+n+' EBITDA vs sector peers',
+        'Validate vs comparable company analysis (CCA) and precedent transactions',
+        'Bear/base/bull scenario: vary revenue growth ±3% and EBITDA margin ±2pp across all forecast years',
       ],
     },
     ifrsNotes:[
-      {title:'WACC Derivation',
-       content:'WACC = Ke×E/(D+E) + Kd×(1−t)×D/(D+E). Cost of equity (CAPM): risk-free rate + β × equity risk premium. After-tax cost of debt at current market borrowing rate × (1−tax). Target/industry average capital structure. WACC: '+a('wacc')+'%.'},
-      {title:'Terminal Value — Gordon Growth Model',
-       content:'TV = FCFF_n × (1+g)/(WACC−g) = $'+fmtV(tv)+'. TGR of '+a('tgr')+'% represents long-run nominal GDP growth — must not exceed WACC. TV = '+r2(pvTV/ev*100)+'% of EV. Sensitivity: TGR +0.5% → EV $'+fmtV(evHiTgr)+'.'},
-      {title:'Sensitivity Analysis',
-       content:'WACC ±1%: EV range $'+fmtV(evHiWacc)+' to $'+fmtV(evLoWacc)+'. TGR ±0.5%: EV range $'+fmtV(evLoTgr)+' to $'+fmtV(evHiTgr)+'. These ranges represent the fundamental uncertainty in terminal value assumptions. Build full sensitivity matrix for Board/investor presentation.'},
+      {title:'WACC Derivation — CAPM',
+       content:'Cost of Equity (Ke) = Rf + β × ERP = '+a('riskFreeRate')+'% + '+a('beta')+'x × '+a('equityRiskPremium')+'% = '+keDisp+'%. After-tax Kd = '+a('costOfDebt')+'% × (1−'+a('taxRate')+'%) = '+kdAtDisp+'%. WACC = '+keDisp+'%×'+r2(we*100)+'% + '+kdAtDisp+'%×'+r2(wd*100)+'% = '+waccDisp+'%.'+(a('waccOverride')>0?' Manual override applied: '+a('waccOverride')+'%':' Auto-calculated from CAPM inputs.')},
+      {title:'Terminal Value — '+(useExit?'EV/EBITDA Exit Multiple':'Gordon Growth Model'),
+       content:useExit ?
+         'TV = EBITDA_n × Exit Multiple = $'+fmtV(ebitda[n-1])+' × '+a('exitMultiple')+'x = $'+fmtV(tv)+'. PV(TV) = $'+fmtV(pvTV)+' ('+tvPctEV+'% of EV). Cross-check Gordon Growth TV = $'+fmtV(Math.max(tvGordon,0))+'.'+(tvWarning||'') :
+         'TV = UFCF_n×(1+g)/(WACC−g) = $'+fmtV(ufcf[n-1])+'×(1+'+a('tgr')+'%)/('+waccDisp+'%−'+a('tgr')+'%) = $'+fmtV(tv)+'. PV(TV) = $'+fmtV(pvTV)+' ('+tvPctEV+'% of EV). TGR ('+a('tgr')+'%) must not exceed long-run nominal GDP growth.'+(tvWarning||'')},
+      {title:'FCF Build — NOPAT Method (Damodaran UFCF)',
+       content:'UFCF = NOPAT + D&A − CapEx − ΔNWC. NOPAT = EBIT × (1−Tax Rate). D&A: '+a('daPercent')+'% of revenue. CapEx: '+a('capexPercent')+'% of revenue. ΔNWC = ΔRevenue × '+a('nwcPercent')+'%. Year-'+n+' UFCF = $'+fmtV(ufcf[n-1])+'. Sum PV(UFCF) = $'+fmtV(sumPvUfcf)+'.'},
+      {title:'Enterprise → Equity Value Bridge',
+       content:'EV $'+fmtV(ev)+' − Total Debt $'+fmtV(a('totalDebt'))+' + Cash $'+fmtV(a('cash'))+' − Minority Interest $'+fmtV(a('minorityInterest'))+' = Equity Value $'+fmtV(equityValue)+'. ÷ '+fmtV(shares)+' diluted shares = $'+impliedPrice+' per share. Current market price $'+currPrice+' → '+(upside>=0?'+':'')+upside+'% '+(upside>=0?'upside':'downside')+'.'},
+      {title:'Sensitivity Analysis — 3×3 WACC × TGR Matrix (Implied Share Price)',
+       content:sensText+'\nWACC ±1%: EV $'+fmtV(evLoWacc)+'–$'+fmtV(evHiWacc)+'. TGR ±0.5%: EV $'+fmtV(evLoTgr)+'–$'+fmtV(evHiTgr)+'. Terminal value typically 60–80% of EV — small changes in WACC/g drive large valuation swings.'},
     ]
   };
 }
@@ -2968,7 +3443,8 @@ function buildLBO(p){
 }
 function computeLBO(n,sy){
   var ev=a('evEntry'), em=a('entryMulti');
-  var ebitdaEntry=r0(ev/em);
+  /* Guard: avoid divide-by-zero when entry multiple = 0 */
+  var ebitdaEntry=em>0?r0(ev/em):0;
   var equity=r0(ev*a('equityPct')/100);
   var debtTotal=ev-equity;
   var mezzDebt=r0(debtTotal*a('mezzPct')/100);
@@ -2992,7 +3468,8 @@ function computeLBO(n,sy){
   var exitEV=r0(exitEBITDA*a('exitMulti'));
   var exitDebt=senBal[n]+mezBal[n];
   var exitEquity=exitEV-exitDebt;
-  var moic=r2(exitEquity/equity);
+  /* Guard: avoid divide-by-zero when equity = 0 */
+  var moic=equity!==0?r2(exitEquity/equity):0;
   var irr=r2(xirr_approx(equity,fcfArr.map(function(f,i){return i===n-1?exitEquity:0;}))*100);
   function sp(v){var a2=fill(n,null);a2[n-1]=v;return a2;}
   return {
@@ -3012,7 +3489,8 @@ function computeLBO(n,sy){
       dr('Equity Contribution ('+a('equityPct')+'% of EV)',sp(-equity)),
       sh('── EBITDA & DEBT SCHEDULE ──────────────────'),
       dr('EBITDA',ebitdaArr),
-      pdr('EBITDA Growth %',ebitdaArr.map(function(e,i){return i===0?r2((e/ebitdaEntry-1)*100):r2((e/ebitdaArr[i-1]-1)*100);})),
+      /* Guard: avoid divide-by-zero when ebitdaEntry or ebitdaArr[i-1] = 0 */
+      pdr('EBITDA Growth %',ebitdaArr.map(function(e,i){return i===0?(ebitdaEntry!==0?r2((e/ebitdaEntry-1)*100):0):(ebitdaArr[i-1]!==0?r2((e/ebitdaArr[i-1]-1)*100):0);})),
       dr('Interest — Senior Debt',intSenArr),
       dr('Interest — Mezzanine Debt',intMezArr),
       tr('EBITDA after Total Interest',ebitdaArr.map(function(e,i){return e+intSenArr[i]+intMezArr[i]-a('mgmtFees');})),
@@ -3022,8 +3500,9 @@ function computeLBO(n,sy){
       tr('Closing Senior Debt',senBal.slice(1,n+1)),
       dr('Mezzanine Debt (bullet at exit)',mezBal.slice(1,n+1)),
       tr('Total Debt',dbArr),
-      pdr('Leverage (Total Debt / EBITDA)',dbArr.map(function(d,i){return r2(d/ebitdaArr[i]);})),
-      pdr('Interest Coverage (EBITDA / Int.)',ebitdaArr.map(function(e,i){return r2(e/Math.abs(intSenArr[i]+intMezArr[i]));})),
+      /* Guard: avoid divide-by-zero when ebitda or total interest = 0 */
+      pdr('Leverage (Total Debt / EBITDA)',dbArr.map(function(d,i){return ebitdaArr[i]!==0?r2(d/ebitdaArr[i]):0;})),
+      pdr('Interest Coverage (EBITDA / Int.)',ebitdaArr.map(function(e,i){var ti=Math.abs(intSenArr[i]+intMezArr[i]);return ti!==0?r2(e/ti):0;})),
       sh('── EXIT & RETURNS ───────────────────────────'),
       dr('Exit EBITDA',sp(exitEBITDA)),
       dr('Exit EV/EBITDA Multiple',sp(a('exitMulti'))),
@@ -3040,11 +3519,13 @@ function computeLBO(n,sy){
       keyFindings:[
         'Entry: EV $'+fmtV(ev)+' | Senior $'+fmtV(seniorDebt)+' | Mezz $'+fmtV(mezzDebt)+' | Equity $'+fmtV(equity),
         'Exit equity: $'+fmtV(exitEquity)+' | MOIC: '+moic+'× | IRR: '+irr+'%',
-        'Entry leverage: '+(debtTotal/ebitdaEntry).toFixed(1)+'× | Exit leverage: '+(dbArr[n-1]/exitEBITDA).toFixed(1)+'×',
+        /* Guard: avoid divide-by-zero in leverage string */
+        'Entry leverage: '+(ebitdaEntry!==0?(debtTotal/ebitdaEntry).toFixed(1):'N/A')+'× | Exit leverage: '+(exitEBITDA!==0?(dbArr[n-1]/exitEBITDA).toFixed(1):'N/A')+'×',
         'Multiple expansion: '+em+'× → '+a('exitMulti')+'× contributes $'+fmtV(r0((a('exitMulti')-em)*exitEBITDA))+' to returns',
       ],
       risks:[
-        'Interest coverage Year 1: '+r2(ebitdaArr[0]/Math.abs(intSenArr[0]+intMezArr[0]))+'× — covenant risk if EBITDA misses',
+        /* Guard: avoid divide-by-zero in interest coverage string */
+        'Interest coverage Year 1: '+(Math.abs(intSenArr[0]+intMezArr[0])!==0?r2(ebitdaArr[0]/Math.abs(intSenArr[0]+intMezArr[0])):0)+'× — covenant risk if EBITDA misses',
         'Mezz debt bullet at exit — refinancing risk if credit markets tighten',
         'Exit multiple compression: if market re-rates at '+r2(em*0.85)+'× entry multiple → lower returns',
       ],
@@ -3098,12 +3579,15 @@ function computeDDM(n,sy){
   var pvDps=dps.map(function(d,i){return r2(d*df[i]);});
   var sumPV=r2(pvDps.reduce(function(s,x){return s+x;},0));
   var termDPS=r2(dps[n-1]*(1+tg));
-  var tv=r2(termDPS/(ke-tg));
+  /* Guard: require Ke > terminal growth by at least 0.1% to avoid division by zero */
+  var tvDenom=Math.max(ke-tg,0.001);
+  var tv=r2(termDPS/tvDenom);
   var pvTV=r2(tv*df[n-1]);
   var intrinsic=r2(sumPV+pvTV);
   /* CAPM check */
   var keCapm=r2(a('rfRate')+a('betaS')*a('erp'));
-  var dvYld=rpt(n,function(i){return r2(dps[i]/intrinsic*100);});
+  /* Guard: avoid divide-by-zero when intrinsic = 0 */
+  var dvYld=rpt(n,function(i){return intrinsic!==0?r2(dps[i]/intrinsic*100):0;});
   return {
     modelType:'Dividend Discount Model (DDM)',
     ifrsStandard:'DDM',
@@ -3180,12 +3664,12 @@ function computeCOMPS(sy){
   var eqByRev=r1(evByRev-nd);
   var eqByEBIT=r1(evByEBIT-nd);
   var shr=a('subjectShares');
-  /* Price per share */
-  var ppEBITDA=r2(eqByEBITDA/shr*1000); // $M → per share ×1000
-  var ppRev=r2(eqByRev/shr*1000);
-  var ppEBIT=r2(eqByEBIT/shr*1000);
-  var ppPE=r2(equityByPE/shr*1000);
-  var ppPB=r2(equityByPB/shr*1000);
+  /* Price per share — guard against divide-by-zero when shares = 0 */
+  var ppEBITDA=shr!==0?r2(eqByEBITDA/shr*1000):0; // $M → per share ×1000
+  var ppRev=shr!==0?r2(eqByRev/shr*1000):0;
+  var ppEBIT=shr!==0?r2(eqByEBIT/shr*1000):0;
+  var ppPE=shr!==0?r2(equityByPE/shr*1000):0;
+  var ppPB=shr!==0?r2(equityByPB/shr*1000):0;
   /* Central estimate = mean of 5 methods */
   var ppArr=[ppEBITDA,ppRev,ppEBIT,ppPE,ppPB];
   var ppMean=r2(ppArr.reduce(function(s,x){return s+x;},0)/ppArr.length);
@@ -3528,95 +4012,6 @@ function computeIFRS9CM(sy){
   };
 }
 
-/* ── IFRS 16 — Lease Modification & Reassessment ─────────────────────*/
-function buildIFRS16MOD(p){
-  var n=parseYrs(p), sy=parseSY(p);
-  freshASM({
-    origPmt:    {label:'Original Annual Payment ($)',    value:120000,  unit:'USD'},
-    origIBR:    {label:'Original IBR %',                 value:5.5,     unit:'%'},
-    origTerm:   {label:'Original Lease Term (yrs)',      value:5,       unit:'yrs'},
-    modYear:    {label:'Modification Occurs (Year No.)', value:2,       unit:''},
-    modType:    {label:'Mod Type (1=Extend 2=Reduce 3=PayChg)', value:1, unit:''},
-    newTerm:    {label:'New Total Term After Mod (yrs)', value:8,       unit:'yrs'},
-    newPmt:     {label:'New Annual Payment After Mod ($)',value:130000, unit:'USD'},
-    revisedIBR: {label:'Revised IBR at Mod Date %',     value:6.0,     unit:'%'},
-    startYear:  {label:'Start Year',                     value:sy,      unit:''},
-  });
-  return computeIFRS16MOD(n,sy);
-}
-function computeIFRS16MOD(n,sy){
-  var oP=a('origPmt'), oR=a('origIBR')/100, oT=Math.round(a('origTerm'));
-  var modY=Math.round(a('modYear')), mT=Math.round(a('newTerm'));
-  var nP=a('newPmt'), nR=a('revisedIBR')/100;
-  var modType=Math.round(a('modType'));
-  /* Original lease liability at inception */
-  function pvAnnuity(pmt,rate,years){
-    if(rate===0) return pmt*years;
-    return pmt*(1-Math.pow(1+rate,-years))/rate;
-  }
-  var origLL=r0(pvAnnuity(oP,oR,oT));
-  /* Liability just before modification (after modY-1 years of repayment) */
-  var llBeforeMod=r0(pvAnnuity(oP,oR,oT-(modY-1)));
-  /* Remeasured liability at modification date */
-  var remainTerm=mT-(modY-1);
-  var newLL=r0(pvAnnuity(nP,nR,remainTerm));
-  var adjustment=r0(newLL-llBeforeMod);
-  /* Build year-by-year table */
-  var llBal=[origLL], rouBal=[origLL];
-  for(var yi=1;yi<n;yi++){
-    var prevLL=llBal[yi-1];
-    if(yi===modY-1){
-      /* Apply modification */
-      var interestBefore=r0(prevLL*oR);
-      var newLLval=newLL;
-      llBal.push(newLLval);
-      rouBal.push(r0(rouBal[yi-1]-origLL/oT+adjustment));
-    } else {
-      var rate2=yi<modY?oR:nR;
-      var pmt2=yi<modY?oP:nP;
-      var interest2=r0(prevLL*rate2);
-      llBal.push(r0(Math.max(0,prevLL+interest2-pmt2)));
-      rouBal.push(r0(Math.max(0,rouBal[yi-1]-origLL/oT)));
-    }
-  }
-  var depn=fill(n,-r0(origLL/oT));
-  var interest=llBal.map(function(b,i){return i<n-1?r0(b*(i<modY?oR:nR)):0;});
-  return {
-    modelType:'IFRS 16 — Lease Modification & Reassessment',
-    ifrsStandard:'IFRS16MOD',
-    description:'Mod type '+['','Extend term','Reduce scope','Payment change'][modType]+' | Mod at Yr '+modY+' | Orig IBR '+a('origIBR')+'% → Revised '+a('revisedIBR')+'%',
-    currency:'USD',layout:'timeseries',
-    tableHeaders:yHdrs(n,sy),
-    tableRows:[
-      sh('── ORIGINAL LEASE (PRE-MODIFICATION) ─────────────────'),
-      dr('Original Annual Payment',fill(n,oP).map(function(v,i){return i<modY?v:null;})),
-      dr('Original Lease Liability Balance',llBal.map(function(v,i){return i<modY?v:null;})),
-      sh('── MODIFICATION ACCOUNTING (IFRS 16.44–46) ────────────'),
-      dr('Liability Before Modification',fill(n,null).map(function(_,i){return i===modY-1?llBeforeMod:null;})),
-      dr('Remeasured Liability (new IBR, new term)',fill(n,null).map(function(_,i){return i===modY-1?newLL:null;})),
-      dr('Adjustment to ROU Asset / P&L',fill(n,null).map(function(_,i){return i===modY-1?adjustment:null;})),
-      sh('── POST-MODIFICATION SCHEDULE ─────────────────────────'),
-      dr('New Annual Payment',fill(n,nP).map(function(v,i){return i>=modY-1?v:null;})),
-      dr('Revised Lease Liability Balance',llBal),
-      dr('ROU Asset Balance',rouBal),
-      sh('── P&L IMPACT ─────────────────────────────────────────'),
-      dr('Depreciation (ROU Asset)',depn),
-      dr('Interest Expense (EIR method)',interest.map(function(v){return -v;})),
-      tr('Total Lease Cost',depn.map(function(d,i){return r0(d-interest[i]);})),
-    ],
-    assumptions:ASM,
-    analysis:{
-      summary:'Original LL at inception: $'+origLL+'. At modification (Yr '+modY+'): $'+llBeforeMod+'. Remeasured to $'+newLL+' (IBR '+a('revisedIBR')+'%). Adjustment: $'+adjustment+' to ROU asset.',
-      keyFindings:['Original LL: $'+origLL,'LL at modification date: $'+llBeforeMod,'Remeasured LL: $'+newLL,'ROU asset adjustment: $'+adjustment],
-      risks:['Scope decrease (IFRS 16.46(a)): partial de-recognition of ROU and LL — gain/loss to P&L','Scope increase treated as separate new lease if additional right-of-use obtained','Revision of non-lease components requires judgement on separation'],
-      recommendations:['Re-assess IBR at modification date (not original IBR for scope changes)','Document modification type (separate lease vs modification of existing lease)','Check if lessee practical expedients apply']
-    },
-    ifrsNotes:[
-      {title:'IFRS 16.44 — Lease Modifications',content:'Modification not accounted as separate lease when: (a) increases scope by adding right to use additional assets, AND (b) lease payments increase commensurate with standalone price. Otherwise: remeasure lease liability using revised discount rate; adjust ROU asset; differences to P&L only for scope decreases.'},
-      {title:'IFRS 16.40–43 — Reassessment (Not Modification)',content:'Reassessment (not modification) required when: lessee exercises or does not exercise purchase option contrary to previous assessment; significant event or change in circumstances affects likelihood of extension/termination option. Reassessment uses revised IBR at reassessment date.'},
-    ]
-  };
-}
 
 /* ── IFRS 3 — Business Combination / PPA ────────────────────────────*/
 function buildIFRS3(p){
@@ -3780,7 +4175,6 @@ function getModel(p){
   if(t==='IFRS9HEDGE')  return buildIFRS9HEDGE(p);
   if(t==='IFRS9CM')     return buildIFRS9CM(p);
   if(t==='IFRS16')      return buildIFRS16(p);
-  if(t==='IFRS16MOD')   return buildIFRS16MOD(p);
   if(t==='IFRS18')      return buildIFRS18_r(p);
   if(t==='IFRS17')      return buildIFRS17(p);
   if(t==='IFRS15')      return buildIFRS15(p);
@@ -3995,7 +4389,8 @@ function renderAssumptions(){
       var k=inp.getAttribute('data-asm-key');
       if(k===editKey) return;
       var src=(inp.dataset.custom==='1'&&_USER_ASM&&_USER_ASM[k])?_USER_ASM[k]:ASM[k];
-      if(src&&parseFloat(inp.value)!==src.value) inp.value=src.value;
+      if(!src) return;
+      if(parseFloat(inp.value)!==parseFloat(src.value)) inp.value=src.value;
     });
     return;
   }
@@ -4004,7 +4399,14 @@ function renderAssumptions(){
   var mh=document.createElement('div');mh.className='asm-sec-hdr';mh.textContent='Model Assumptions';
   ms.appendChild(mh);
   var mg=document.createElement('div');mg.className='asm-grid';
-  Object.keys(ASM).forEach(function(k){mg.appendChild(_asmCard(k,ASM[k],false));});
+  Object.keys(ASM).forEach(function(k){
+    var entry=ASM[k];
+    if(entry.section){
+      var sh2=document.createElement('div');sh2.className='asm-sub-hdr';sh2.textContent=entry.section;
+      mg.appendChild(sh2);
+    }
+    mg.appendChild(_asmCard(k,entry,false));
+  });
   ms.appendChild(mg); g.appendChild(ms);
   var ukeys=Object.keys(_USER_ASM||{});
   if(ukeys.length){
@@ -4026,17 +4428,35 @@ function _asmCard(k,asm,isCustom){
   card.className='ac'+(isCustom?' ac-custom':'');
   var lbl=document.createElement('div');lbl.className='al';lbl.textContent=asm.label||k;
   var row=document.createElement('div');row.className='ar';
-  var inp=document.createElement('input');inp.type='number';inp.className='ai';
-  inp.value=parseFloat(asm.value)||0;inp.step='any';inp.dataset.asmKey=k;inp.dataset.custom=isCustom?'1':'0';
-  inp.setAttribute('inputmode','decimal');inp.setAttribute('autocomplete','off');inp.setAttribute('spellcheck','false');
+  var ctrl;
+  if(asm.type==='select'&&asm.options&&asm.options.length){
+    /* Render a styled select/dropdown for enum-type assumptions */
+    ctrl=document.createElement('select');ctrl.className='ai';
+    ctrl.dataset.asmKey=k;ctrl.dataset.custom=isCustom?'1':'0';
+    asm.options.forEach(function(opt){
+      var o=document.createElement('option');o.value=opt.value;o.textContent=opt.label;
+      if(parseFloat(opt.value)===parseFloat(asm.value)) o.selected=true;
+      ctrl.appendChild(o);
+    });
+    ctrl.addEventListener('change',(function(key,custom){return function(){
+      var nv=parseFloat(this.value);
+      if(custom){if(_USER_ASM[key])_USER_ASM[key].value=nv;}
+      else{if(ASM[key])ASM[key].value=nv;}
+      _debounceRecompute();
+    };})(k,isCustom));
+  } else {
+    ctrl=document.createElement('input');ctrl.type='number';ctrl.className='ai';
+    ctrl.value=parseFloat(asm.value)||0;ctrl.step='any';ctrl.dataset.asmKey=k;ctrl.dataset.custom=isCustom?'1':'0';
+    ctrl.setAttribute('inputmode','decimal');ctrl.setAttribute('autocomplete','off');ctrl.setAttribute('spellcheck','false');
+    ctrl.addEventListener('input',(function(key,custom){return function(){
+      var nv=parseFloat(this.value);if(isNaN(nv))return;
+      if(custom){if(_USER_ASM[key])_USER_ASM[key].value=nv;}
+      else{if(ASM[key])ASM[key].value=nv;}
+      _debounceRecompute();
+    };})(k,isCustom));
+  }
   var unit=document.createElement('span');unit.className='au';unit.textContent=asm.unit||'';
-  inp.addEventListener('input',(function(key,custom){return function(){
-    var nv=parseFloat(this.value);if(isNaN(nv))return;
-    if(custom){if(_USER_ASM[key])_USER_ASM[key].value=nv;}
-    else{if(ASM[key])ASM[key].value=nv;}
-    _debounceRecompute();
-  };})(k,isCustom));
-  row.appendChild(inp);row.appendChild(unit);card.appendChild(lbl);card.appendChild(row);
+  row.appendChild(ctrl);row.appendChild(unit);card.appendChild(lbl);card.appendChild(row);
   if(isCustom){
     var del=document.createElement('span');del.className='asm-del';del.textContent='✕';del.title='Remove';
     del.onclick=(function(key){return function(){delete _USER_ASM[key];renderAssumptions();};})(k);
@@ -4350,7 +4770,7 @@ function _extractSeries(model){
     if(/^revenue$|^total revenue|^net revenue|^insurance revenue/.test(lbl))s.revenue=vals;
     else if(/^ebitda$/.test(lbl))s.ebitda=vals;
     else if(/^ebit$/.test(lbl))s.ebit=vals;
-    else if(/free cash flow to firm|^fcff|^fcf$/.test(lbl))s.fcff=vals;
+    else if(/free cash flow to firm|^fcff|^fcf$|unlevered free cash flow|^= unlevered/.test(lbl))s.fcff=vals;
     else if(/^nopat/.test(lbl))s.nopat=vals;
     else if(/net profit|profit after tax|pre-tax insurance result/.test(lbl))s.pat=vals;
     else if(/closing nbv|finite-life intangibles nbv/.test(lbl))s.nbv=vals;
@@ -4362,8 +4782,8 @@ function _extractSeries(model){
     else if(/^closing dbo/.test(lbl))s.dbo=vals;
     else if(/closing fair value.*plan|plan assets.*closing/.test(lbl))s.planAssets=vals;
     else if(/^net defined benefit liability/.test(lbl))s.netPension=vals;
-    else if(/^enterprise value$/.test(lbl))s.ev=vals;
-    else if(/^equity value$/.test(lbl))s.equity=vals;
+    else if(/^enterprise value/.test(lbl))s.ev=vals;
+    else if(/^equity value$|^= equity value$/.test(lbl))s.equity=vals;
     else if(/^exit equity value/.test(lbl))s.exitEquity=vals;
     else if(/^closing inventory$|^closing balance.*inventory/.test(lbl))s.inventory=vals;
     else if(/^closing balance.*warranty/.test(lbl))s.warranty=vals;
