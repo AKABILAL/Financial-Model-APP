@@ -379,6 +379,18 @@ select.ai option{background:#1c1c1e;color:#f5f5f7;font-size:11px;}
   border-left:2px solid rgba(134,188,37,.25);
 }
 .asm-note strong{color:#636366}
+/* ─── IFRS 15 Dynamic Obligation Cards ─── */
+.ifrs15-ob-card{background:#0d0d0d;border:1px solid rgba(134,188,37,.2);border-radius:12px;padding:14px 14px 12px;margin-bottom:10px;transition:border-color .15s}
+.ifrs15-ob-card:hover{border-color:rgba(134,188,37,.4)}
+.ifrs15-ob-hdr{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.ifrs15-ob-num{font-family:ui-monospace,monospace;font-size:9px;font-weight:700;color:#86BC25;background:rgba(134,188,37,.12);border-radius:4px;padding:2px 7px;flex-shrink:0}
+.ifrs15-ob-name{flex:1;background:transparent;border:none;border-bottom:1px solid #2c2c2e;color:#f5f5f7;font-size:13px;font-weight:600;outline:none;padding:3px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;transition:border-color .12s;min-width:0}
+.ifrs15-ob-name:focus{border-bottom-color:#86BC25}
+.ifrs15-ob-del{background:transparent;border:1px solid #3a3a3c;border-radius:6px;color:#636366;font-size:10px;cursor:pointer;padding:3px 8px;transition:all .12s;flex-shrink:0}
+.ifrs15-ob-del:hover{border-color:#ff453a;color:#ff453a}
+.ifrs15-add-btn{background:#0d0d0d;border:1px dashed rgba(134,188,37,.3);border-radius:8px;padding:8px 14px;font-size:10px;color:#86BC25;cursor:pointer;transition:all .12s;font-family:inherit;font-weight:600}
+.ifrs15-add-btn:hover{background:rgba(134,188,37,.07);border-style:solid}
+.ifrs15-sec-hdr{display:flex;justify-content:space-between;align-items:center;font-family:ui-monospace,monospace;font-size:9px;color:#636366;text-transform:uppercase;letter-spacing:1.5px;padding-bottom:8px;border-bottom:1px solid #1c1c1e;font-weight:600;margin-bottom:10px}
 
 /* ─── ANALYSIS / NOTES ─── */
 .cp{padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
@@ -946,6 +958,9 @@ function freshASM(defaults){
 ═══════════════════════════════════════════════════════════════════════ */
 var M=null, PR='', ASM={}, HIST=[], _stTm=null;
 var _cellOverrides={}, _USER_ASM={}, _currentModelType='';
+/* ── IFRS 15 dynamic obligation state ── */
+var _IFRS15_OBS=[];
+var _IFRS15_INDUSTRY='';
 
 /* ── Core utility functions (must be defined before model builders) ── */
 function mk(tag,attrs){var el=document.createElement(tag);Object.keys(attrs||{}).forEach(function(k){if(k==='style')el.style.cssText=attrs[k];else if(k==='className')el.className=attrs[k];else el[k]=attrs[k];});return el;}
@@ -1045,7 +1060,7 @@ function detect(p){
   if(/\becl\b|expected.?credit|stage\s*[123]/.test(p)) return 'IFRS9';
   if(/\blease\b|right.?of.?use|\bibr\b/.test(p)) return 'IFRS16';
   if(/insurance|\bcsm\b/.test(p)) return 'IFRS17';
-  if(/revenue.?recog|perf.*oblig/.test(p)) return 'IFRS15';
+  if(/revenue.?recog|perf.*oblig|revenue.*contract|contracts.*customer/.test(p)) return 'IFRS15';
   if(/prop.*plant|\bppe\b|asset.?cost|useful.?life/.test(p)) return 'IAS16';
   if(/\bwacc\b|\bebitda\b|terminal.?value/.test(p)) return 'DCF';
   return 'DCF';
@@ -2854,106 +2869,276 @@ function computeIAS37(n,sy){
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   MODEL 11: IFRS 15 — Revenue Recognition
-   Layout: cross-section (5-step)
+   MODEL 11: IFRS 15 — Dynamic Industry-Agnostic Revenue Recognition
+   Supports: Construction | Manufacturing | Services | SaaS | Telecom | Custom
+   Five-step engine with configurable performance obligations
 ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Industry Templates ── */
+var _IFRS15_TPLS={
+  saas:{name:'SaaS / Subscription',obs:[
+    {id:1,name:'Platform / Software Access',timing:'over_time',method:'straight_line',ssp:3000000,duration:3,costPct:20,growthRate:20,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:2,name:'Onboarding / Implementation',timing:'point_in_time',method:'straight_line',ssp:500000,duration:1,costPct:40,growthRate:15,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:3,name:'Customer Support',timing:'over_time',method:'straight_line',ssp:400000,duration:3,costPct:30,growthRate:18,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:4,name:'Professional Services',timing:'point_in_time',method:'straight_line',ssp:300000,duration:1,costPct:35,growthRate:10,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+  ]},
+  construction:{name:'Construction Company',obs:[
+    {id:1,name:'Combined Project Delivery (Design + Build)',timing:'over_time',method:'cost_to_cost',ssp:8000000,duration:2,costPct:70,growthRate:5,hasVarConsid:1,varMethod:'expected_value',varAmount:300000,varConstrained:1,warrantyType:'assurance',hasSFC:0,sfcRate:0},
+    {id:2,name:'Post-Construction Maintenance',timing:'over_time',method:'straight_line',ssp:500000,duration:1,costPct:40,growthRate:3,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:3,name:'Service-Type Warranty',timing:'over_time',method:'straight_line',ssp:200000,duration:1,costPct:30,growthRate:2,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'service_type',hasSFC:0,sfcRate:0},
+  ]},
+  manufacturing:{name:'Manufacturing Company',obs:[
+    {id:1,name:'Product Delivery',timing:'point_in_time',method:'straight_line',ssp:3000000,duration:1,costPct:55,growthRate:8,hasVarConsid:1,varMethod:'expected_value',varAmount:150000,varConstrained:1,warrantyType:'assurance',hasSFC:0,sfcRate:0},
+    {id:2,name:'Installation Services',timing:'point_in_time',method:'straight_line',ssp:400000,duration:1,costPct:45,growthRate:5,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:3,name:'After-Sales Service / Warranty (Service-Type)',timing:'over_time',method:'straight_line',ssp:300000,duration:2,costPct:35,growthRate:4,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'service_type',hasSFC:0,sfcRate:0},
+  ]},
+  services:{name:'Service-Based Company',obs:[
+    {id:1,name:'Time-Based Services (Hourly/Daily)',timing:'over_time',method:'straight_line',ssp:2000000,duration:1,costPct:50,growthRate:10,hasVarConsid:1,varMethod:'expected_value',varAmount:100000,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:2,name:'Project Deliverables (Milestones)',timing:'over_time',method:'output_milestones',ssp:800000,duration:1,costPct:45,growthRate:8,hasVarConsid:1,varMethod:'most_likely',varAmount:50000,varConstrained:1,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:3,name:'Ongoing Retainer / Support',timing:'over_time',method:'straight_line',ssp:600000,duration:2,costPct:35,growthRate:12,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+  ]},
+  telecom:{name:'Telecom Company',obs:[
+    {id:1,name:'Network / Connectivity Services',timing:'over_time',method:'straight_line',ssp:2400000,duration:2,costPct:40,growthRate:8,hasVarConsid:1,varMethod:'expected_value',varAmount:200000,varConstrained:1,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:2,name:'Device / Handset Sale',timing:'point_in_time',method:'straight_line',ssp:1200000,duration:1,costPct:65,growthRate:5,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'assurance',hasSFC:1,sfcRate:8},
+    {id:3,name:'Installation / Activation Fee',timing:'point_in_time',method:'straight_line',ssp:100000,duration:1,costPct:20,growthRate:3,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+    {id:4,name:'Data / Voice Plan',timing:'over_time',method:'straight_line',ssp:1800000,duration:2,costPct:35,growthRate:10,hasVarConsid:1,varMethod:'expected_value',varAmount:150000,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+  ]},
+  custom:{name:'Custom / Other Industry',obs:[
+    {id:1,name:'Performance Obligation 1',timing:'over_time',method:'straight_line',ssp:2000000,duration:2,costPct:40,growthRate:10,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0},
+  ]},
+};
+
+function _i15NextId(){var m=0;_IFRS15_OBS.forEach(function(o){if(o.id>m)m=o.id;});return m+1;}
+function _i15LoadTpl(k){
+  var tpl=_IFRS15_TPLS[k]||_IFRS15_TPLS.saas;
+  _IFRS15_INDUSTRY=k;
+  _IFRS15_OBS=tpl.obs.map(function(o){return Object.assign({},o);});
+}
+
 function buildIFRS15(p){
   var n=parseYrs(p), sy=parseSY(p);
   freshASM({
-    contractVal: {label:'Total Contract Value',      value:5000000,  unit:'USD'},
-    numContracts:{label:'Number of Contracts',       value:10,       unit:''},
-    varConsid:   {label:'Variable Consideration',    value:200000,   unit:'USD'},
-    constraintPct:{label:'Variable Consid. Constraint %',value:90,   unit:'%'},
-    po1Pct:      {label:'PO1 — SaaS License %',      value:40,       unit:'%'},
-    po2Pct:      {label:'PO2 — Implementation %',    value:35,       unit:'%'},
-    po3Pct:      {label:'PO3 — Support & Maint. %',  value:25,       unit:'%'},
-    po1Term:     {label:'PO1 — Term (Years)',          value:1,       unit:'yrs'},
-    po3Term:     {label:'PO3 — Support Term (Years)', value:2,       unit:'yrs'},
-    revGrowth:   {label:'Contract Volume Growth',     value:10,       unit:'%'},
-    startYear:   {label:'Start Year',                 value:sy,       unit:''},
+    industry:     {label:'Industry',              value:0,  unit:'',type:'select',options:[
+      {value:0,label:'SaaS / Subscription'},{value:1,label:'Construction'},
+      {value:2,label:'Manufacturing'},{value:3,label:'Services (Consulting/Legal)'},
+      {value:4,label:'Telecom'},{value:5,label:'Custom / Other'},
+    ]},
+    numContracts: {label:'Contracts Per Year',    value:10, unit:''},
+    subscriberBase:{label:'Subscriber Base',      value:50000,unit:''},
+    startYear:    {label:'Start Year',            value:sy, unit:''},
+    numYears:     {label:'Projection Years',      value:n,  unit:'yrs'},
   });
+  var iKeys=['saas','construction','manufacturing','services','telecom','custom'];
+  var ik=iKeys[Math.round(a('industry'))]||'saas';
+  if(!_IFRS15_OBS.length||_IFRS15_INDUSTRY!==ik) _i15LoadTpl(ik);
   return computeIFRS15(n,sy);
 }
+
 function computeIFRS15(n,sy){
-  var cv=a('contractVal'), nc=a('numContracts');
-  var vc=a('varConsid'), vcc=a('constraintPct')/100;
-  var totalConstrainedRev=cv*nc+vc*vcc; // constrained transaction price
-  var po1=r0(totalConstrainedRev*a('po1Pct')/100);
-  var po2=r0(totalConstrainedRev*a('po2Pct')/100);
-  var po3=r0(totalConstrainedRev*a('po3Pct')/100);
-  var totalTP=po1+po2+po3;
-  /* Revenue recognition per year */
-  var rev=rpt(n,function(i){return r0(totalTP*Math.pow(1+a('revGrowth')/100,i));});
-  var ctb=rev.map(function(r){return-r0(r*0.35);}); // cost to obtain contract
-  var cts=rev.map(function(r){return-r0(r*0.04);}); // cost to obtain contract - amortised
-  /* Contract assets/liabilities */
-  var cbl=rpt(n,function(i){return r0(totalTP*0.12*Math.pow(0.9,i));}); // contract liability (deferred rev)
-  var cab=rpt(n,function(i){return r0(totalTP*0.08*Math.pow(0.92,i));}); // contract asset (unbilled)
+  var nc=Math.max(1,a('numContracts'));
+  var sb=Math.max(1,a('subscriberBase'));
+  var iKeys=['saas','construction','manufacturing','services','telecom','custom'];
+  var ik=iKeys[Math.round(a('industry'))]||'saas';
+  var iName=(_IFRS15_TPLS[ik]||{}).name||'SaaS';
+  var iShort={saas:'SaaS',construction:'Construction',manufacturing:'Manufacturing',services:'Services',telecom:'Telecom',custom:'Custom'}[ik]||'';
+  var obs=_IFRS15_OBS.length?_IFRS15_OBS:(_IFRS15_TPLS[ik]||_IFRS15_TPLS.saas).obs;
+  var MNAMES={cost_to_cost:'Cost-to-Cost (Input)',output_milestones:'Output/Milestones',straight_line:'Straight-Line'};
+
+  /* ── Step 3: Determine Transaction Price ── */
+  var totalSSP=obs.reduce(function(s,o){return s+o.ssp;},0)||1;
+  var obc=obs.map(function(o){
+    var vc=o.hasVarConsid?(o.varConstrained?r0(o.varAmount*0.9):o.varAmount):0;
+    var sfc=(o.hasSFC&&o.sfcRate>0&&o.duration>1)?r0(o.ssp*(1-1/Math.pow(1+o.sfcRate/100,o.duration))):0;
+    return {o:o,vc:vc,sfc:sfc,alloc:Math.max(0,o.ssp+vc-sfc)};
+  });
+  var totalTP=obc.reduce(function(s,c){return s+c.alloc;},0)||1;
+  var vcTotal=obc.reduce(function(s,c){return s+c.vc;},0);
+  var sfcTotal=obc.reduce(function(s,c){return s+c.sfc;},0);
+  var vcGross=obs.reduce(function(s,o){return s+(o.hasVarConsid?o.varAmount:0);},0);
+
+  /* ── Step 5: Revenue (cohort model) ──
+     For year p: sum contributions from cohorts c=1..p
+     Cohort c: nc contracts, SSP × growthRate^(c-1) */
+  function obRev(c,p){
+    var ob=c.o, tot=0;
+    for(var yr=1;yr<=p;yr++){
+      var a2=c.alloc*nc*Math.pow(1+ob.growthRate/100,yr-1);
+      if(ob.timing==='point_in_time'){
+        if(yr===p) tot+=a2;
+      } else {
+        var dur=Math.max(1,ob.duration);
+        if(p>=yr&&p<yr+dur) tot+=a2/dur;
+      }
+    }
+    return r0(tot);
+  }
+  function obBill(c,p){
+    /* Billing model:
+       - Point-in-time: billed at recognition (same period)
+       - Over-time, duration ≤ 1yr: billed at recognition (same period)
+       - Over-time, multi-year: billed upfront at contract signing (new cohort p only)
+         → creates contract liability (deferred revenue) */
+    var ob=c.o, dur=Math.max(1,ob.duration);
+    var gf=Math.pow(1+ob.growthRate/100,p-1);
+    var newCohortBill=c.alloc*nc*gf;
+    if(ob.timing==='point_in_time'||dur<=1){
+      /* Same-period billing — no contract balance */
+      return r0(newCohortBill);
+    } else {
+      /* Multi-year contract: customer pays full contract value upfront.
+         Creates deferred revenue (contract liability) that unwinds as revenue recognised. */
+      return r0(newCohortBill);
+    }
+  }
+
+  var obRevs=obc.map(function(c){return rpt(n,function(i){return obRev(c,i+1);});});
+  var obBills=obc.map(function(c){return rpt(n,function(i){return obBill(c,i+1);});});
+  var obCosts=obc.map(function(c,j){return obRevs[j].map(function(rv){return r0(rv*c.o.costPct/100);});});
+
+  var totRev=rpt(n,function(i){return obc.reduce(function(s,_,j){return s+obRevs[j][i];},0);});
+  var totCost=rpt(n,function(i){return obc.reduce(function(s,_,j){return s+obCosts[j][i];},0);});
+  var totGP=totRev.map(function(rv,i){return rv-totCost[i];});
+  var totBill=rpt(n,function(i){return obc.reduce(function(s,_,j){return s+obBills[j][i];},0);});
+
+  /* Contract balances per obligation */
+  var obDeferred=obc.map(function(_,j){
+    var cl=[],prev=0;
+    for(var i=0;i<n;i++){cl.push(r0(prev+obBills[j][i]-obRevs[j][i]));prev=cl[i];}
+    return cl;
+  });
+  var totDef=rpt(n,function(i){var s=0;obDeferred.forEach(function(a2){if(a2[i]>0)s+=a2[i];});return s;});
+  var totCA=rpt(n,function(i){var s=0;obDeferred.forEach(function(a2){if(a2[i]<0)s+=Math.abs(a2[i]);});return s;});
+
+  /* Recurring revenue (over-time obligations only) for KPIs */
+  var recRev=rpt(n,function(i){return obc.reduce(function(s,c,j){return c.o.timing==='over_time'?s+obRevs[j][i]:s;},0);});
+
+  /* ── Build table rows ── */
+  var rows=[];
+  rows.push(sh('── STEP 1: IDENTIFY THE CONTRACT (IFRS 15.9) ──────────────'));
+  rows.push(dr('Industry / Portfolio Type',fill(n,0).map(function(){return iName;})));
+  rows.push(dr('New Contracts Per Year',fill(n,nc)));
+  rows.push(dr('Subscriber / Customer Base',fill(n,sb)));
+  rows.push(tr('Total Contract SSP (Year 1 Portfolio)',fill(n,r0(totalSSP*nc))));
+
+  rows.push(sh('── STEP 2: IDENTIFY PERFORMANCE OBLIGATIONS (IFRS 15.22) ──'));
+  obc.forEach(function(c,j){
+    var lbl='PO'+(j+1)+': '+c.o.name+' ['+(c.o.timing==='over_time'?'Over Time — '+(MNAMES[c.o.method]||c.o.method):'Point in Time')+']';
+    rows.push(dr(lbl,fill(n,c.o.ssp)));
+  });
+  rows.push(tr('Total Standalone Selling Price (SSP)',fill(n,totalSSP)));
+
+  rows.push(sh('── STEP 3: DETERMINE TRANSACTION PRICE (IFRS 15.47–58) ───'));
+  rows.push(dr('Total SSP (Base)',fill(n,r0(totalSSP*nc))));
+  if(vcGross>0){
+    rows.push(dr('Variable Consideration — Gross',fill(n,r0(vcGross*nc))));
+    rows.push(dr('Variable Consideration — Constrained (IFRS 15.56)',fill(n,r0(vcTotal*nc))));
+  }
+  if(sfcTotal>0) rows.push(dr('Significant Financing Component Adj. (IFRS 15.60)',fill(n,-r0(sfcTotal*nc))));
+  rows.push(tr('Constrained Transaction Price (Portfolio)',fill(n,r0(totalTP*nc))));
+
+  rows.push(sh('── STEP 4: ALLOCATE TP — RELATIVE SSP METHOD (IFRS 15.73) '));
+  obc.forEach(function(c,j){
+    var wt=r2(c.alloc/totalTP*100);
+    rows.push(dr('PO'+(j+1)+' Allocated ('+wt+'% of TP)',fill(n,r0(c.alloc*nc))));
+  });
+  rows.push(tr('Total Allocated (= Transaction Price)',fill(n,r0(totalTP*nc))));
+
+  rows.push(sh('── STEP 5: REVENUE RECOGNITION SCHEDULE (IFRS 15.31–38) ──'));
+  obc.forEach(function(c,j){
+    rows.push(dr('PO'+(j+1)+' — '+c.o.name+' ('+(c.o.timing==='over_time'?'OT':'PiT')+')',obRevs[j],'number','Revenue = Allocated Price × recognition progress (IFRS 15.35–37)'));
+  });
+  rows.push(tr('Total Revenue Recognised',totRev));
+
+  rows.push(sh('── CONTRACT BALANCES (IFRS 15.105–107) ────────────────────'));
+  rows.push(dr('Total Billings in Period',totBill));
+  rows.push(dr('Contract Liability / Deferred Revenue',totDef,'number','Billed > Recognised → customer has paid in advance (IFRS 15.106)'));
+  rows.push(dr('Contract Asset (Unbilled Revenue)',totCA,'number','Recognised > Billed → conditioned on further performance (IFRS 15.107)'));
+  rows.push(tr('Trade Receivable (Unconditional Right)',totBill.map(function(b){return r0(b*0.85);})));
+
+  rows.push(sh('── COST & MARGIN ANALYSIS ──────────────────────────────────'));
+  obc.forEach(function(c,j){
+    rows.push(dr('PO'+(j+1)+' Direct Costs ('+c.o.costPct+'%)',obCosts[j].map(function(v){return-v;})));
+  });
+  rows.push(dr('Total Direct Costs',totCost.map(function(v){return-v;})));
+  rows.push(tr('Gross Profit',totGP));
+  rows.push(pdr('Gross Margin %',totRev.map(function(rv,i){return rv?r2(totGP[i]/rv*100):0;})));
+
+  rows.push(sh('── INDUSTRY KPIs ────────────────────────────────────────────'));
+  if(ik==='saas'||ik==='telecom'){
+    rows.push(dr('Annual Recurring Revenue (ARR)',recRev));
+    rows.push(dr('Monthly Recurring Revenue (MRR)',recRev.map(function(rv){return r0(rv/12);})));
+    if(ik==='telecom'){
+      rows.push(dr('ARPU — Monthly ($)',recRev.map(function(rv){return rv>0?r2(rv/sb/12):0;})));
+      rows.push(dr('Blended ARPU — Monthly ($)',totRev.map(function(rv){return rv>0?r2(rv/sb/12):0;})));
+      rows.push(pdr('Estimated Churn Rate %',rpt(n,function(i){return r2(4*Math.pow(0.95,i));})));
+    } else {
+      rows.push(pdr('Estimated Churn Rate %',rpt(n,function(i){return r2(5*Math.pow(0.95,i));})));
+      rows.push(pdr('Net Revenue Retention %',rpt(n,function(i){return r2(Math.min(130,115+i*2));})));
+    }
+  }
+  if(ik==='construction'||ik==='manufacturing'){
+    var ctcList=obc.filter(function(c){return c.o.timing==='over_time'&&c.o.method==='cost_to_cost';});
+    if(ctcList.length){
+      var j0=obc.indexOf(ctcList[0]);
+      var cumRevC=rpt(n,function(i){var s=0;for(var k=0;k<=i;k++)s+=obRevs[j0][k];return s;});
+      var totAlloc0=obc[j0].alloc*nc;
+      rows.push(pdr('% Completion (Cost-to-Cost)',cumRevC.map(function(r){return totAlloc0?r2(r/totAlloc0*100):0;})));
+    }
+  }
+  var cumTotRev=rpt(n,function(i){var s=0;for(var k=0;k<=i;k++)s+=totRev[k];return s;});
+  rows.push(dr('Remaining POs — Backlog',cumTotRev.map(function(c2){return Math.max(0,r0(totalTP*nc-c2));})));
+  rows.push(pdr('Revenue Mix — Recurring %',totRev.map(function(rv,i){return rv?r2(recRev[i]/rv*100):0;})));
+
+  /* ── Analysis ── */
+  var vcNotes=vcGross>0?('Variable consideration $'+fmtV(r0(vcGross*nc))+' gross; $'+fmtV(r0(vcTotal*nc))+' constrained (IFRS 15.56). '):'';
+  var sfcNotes=sfcTotal>0?('SFC adjustment -$'+fmtV(r0(sfcTotal*nc))+' (IFRS 15.60). '):'';
+
   return {
-    modelType:'IFRS 15 — Revenue from Contracts with Customers',
+    modelType:'IFRS 15 — Revenue from Contracts with Customers ('+iShort+')',
     ifrsStandard:'IFRS 15',
-    description:'5-Step model | Transaction price allocation | '+n+' years from FY'+sy,
-    currency:'USD', reportingDate:'FY'+(sy+n-1),
+    description:'Dynamic 5-Step | '+iName+' | '+obs.length+' Performance Obligations | '+n+'yr from FY'+sy,
+    currency:'USD',reportingDate:'FY'+(sy+n-1),
     layout:'timeseries',
     tableHeaders:yHdrs(n,sy),
-    tableRows:[
-      sh('── STEP 1: IDENTIFY THE CONTRACT ──────────'),
-      dr('Number of Contracts',fill(n,nc)),
-      dr('Total Contract Value ($)',fill(n,cv*nc)),
-      dr('Variable Consideration (gross)',fill(n,vc)),
-      dr('Variable Consideration — Constrained',fill(n,r0(vc*vcc))),
-      tr('Constrained Transaction Price (Portfolio)',fill(n,totalTP)),
-      sh('── STEP 2–3: IDENTIFY & ALLOCATE TO POs ──'),
-      dr('PO1: SaaS License ('+a('po1Pct')+'%) — Point-in-time / Over time',fill(n,po1)),
-      dr('PO2: Implementation ('+a('po2Pct')+'%) — Point-in-time',fill(n,po2)),
-      dr('PO3: Support & Maintenance ('+a('po3Pct')+'%) — Over time',fill(n,po3)),
-      tr('Total Transaction Price Allocated',fill(n,totalTP)),
-      sh('── STEP 4: DETERMINE WHEN TO RECOGNISE ────'),
-      dr('PO1 Recognised over '+a('po1Term')+'yr(s)',fill(n,r0(po1/a('po1Term')))),
-      dr('PO2 Recognised at completion',fill(n,po2)),
-      dr('PO3 Recognised over '+a('po3Term')+' years',fill(n,r0(po3/a('po3Term')))),
-      sh('── STEP 5: RECOGNISE REVENUE ───────────────'),
-      dr('Revenue Recognised — PO1',rev.map(function(r){return r0(r*a('po1Pct')/100);})),
-      dr('Revenue Recognised — PO2',rev.map(function(r){return r0(r*a('po2Pct')/100);})),
-      dr('Revenue Recognised — PO3',rev.map(function(r){return r0(r*a('po3Pct')/100);})),
-      tr('Total Revenue Recognised',rev),
-      sh('── CONTRACT BALANCES (IFRS 15.105) ────────'),
-      dr('Contract Liability (Deferred Revenue)',cbl),
-      dr('Contract Asset (Unbilled Revenue)',cab),
-      dr('Trade Receivable (Billed, Unconditional)',rev.map(function(r){return r0(r*0.20);})),
-      sh('── COST OF OBTAINING / FULFILLING CONTRACT '),
-      dr('Incremental Costs to Obtain (Capitalised)',rev.map(function(r){return r0(r*0.04);})),
-      dr('Amortisation of Contract Costs',rev.map(function(r){return-r0(r*0.04/a('po1Term'));})),
-      dr('Cost to Fulfil Contract (COGS)',ctb),
-    ],
+    tableRows:rows,
     assumptions:ASM,
     analysis:{
-      summary:'Transaction price of $'+fmtV(totalTP)+' per portfolio allocated across 3 POs. Revenue grows at '+a('revGrowth')+'% to $'+fmtV(rev[n-1])+' by Year '+n+'. Variable consideration constrained at '+a('constraintPct')+'% ($'+fmtV(r0(vc*vcc))+') per IFRS 15.56.',
+      summary:'IFRS 15 dynamic model — '+iName+'. Portfolio of '+nc+' contracts/yr. Total TP per contract $'+fmtV(r0(totalTP))+'. Revenue Year 1: $'+fmtV(totRev[0]||0)+', Year '+n+': $'+fmtV(totRev[n-1]||0)+'. Gross margin Year 1: '+r2((totGP[0]||0)/Math.max(totRev[0]||1,1)*100)+'%. '+vcNotes+sfcNotes,
       keyFindings:[
-        'Constrained transaction price: $'+fmtV(totalTP)+' (portfolio of '+nc+' contracts)',
-        'PO allocation: License '+a('po1Pct')+'% ($'+fmtV(po1)+') | Implementation '+a('po2Pct')+'% ($'+fmtV(po2)+') | Support '+a('po3Pct')+'% ($'+fmtV(po3)+')',
-        'Variable consideration constrained at '+a('constraintPct')+'% to avoid significant revenue reversal',
-        'Contract liability (deferred revenue): $'+fmtV(cbl[0])+' | Contract asset: $'+fmtV(cab[0]),
+        iName+' | '+obs.length+' performance obligations | '+nc+' contracts/yr',
+        'Total Transaction Price (Year 1 portfolio): $'+fmtV(r0(totalTP*nc)),
+        'Revenue: $'+fmtV(totRev[0]||0)+' (Y1) → $'+fmtV(totRev[n-1]||0)+' (Y'+n+')',
+        'Gross Margin Y1: '+r2((totGP[0]||0)/Math.max(totRev[0]||1,1)*100)+'%',
+        'Deferred Revenue Y1: $'+fmtV(totDef[0]||0)+' | Contract Asset Y1: $'+fmtV(totCA[0]||0),
       ],
       risks:[
-        'Variable consideration constraint requires judgement — risk of under/over-recognition',
-        'PO identification and SSP allocation are key judgements affecting revenue timing',
-        'Contract modifications may require retrospective adjustment or prospective treatment',
+        'Variable consideration constraint (IFRS 15.56) requires significant judgement',
+        'SSP determination — observable vs. estimated approaches (IFRS 15.75–78)',
+        'Contract modifications require assessment under IFRS 15.18–21',
+        'Significant financing component threshold and interest recognition (IFRS 15.60–65)',
       ],
       recommendations:[
-        'Use observable SSP (stand-alone selling price) for each PO; if not observable use adjusted market, cost-plus, or residual approach',
-        'Apply constraint: include variable consideration only to extent highly probable no significant reversal',
-        'Disclose disaggregation of revenue, contract balances, remaining performance obligations per IFRS 15.113',
+        'Document SSP methodology for each PO and reassess annually',
+        'Apply variable consideration constraint conservatively to avoid revenue reversal',
+        'Implement robust contract asset/liability roll-forward tracking (IFRS 15.118)',
+        'Disaggregate revenue by category, geography, customer type per IFRS 15.114–115',
       ],
     },
     ifrsNotes:[
-      {title:'5-Step Model (IFRS 15.9)',
-       content:'(1) Identify contract(s) with customer; (2) Identify performance obligations (distinct goods/services); (3) Determine transaction price (incl. variable consideration, constrained to avoid reversal); (4) Allocate TP to POs based on relative SSP; (5) Recognise revenue when (or as) PO satisfied — over time (SaaS/support) or point in time (implementation). Three POs identified: License (40%), Implementation (35%), Support (25%).'},
-      {title:'Variable Consideration (IFRS 15.50–58)',
-       content:'Variable consideration of $'+fmtV(vc)+' estimated using expected value or most likely amount. Constraint applied: include only amount not probable of significant reversal. Constraint of '+a('constraintPct')+'% applied → $'+fmtV(r0(vc*vcc))+' included in TP. Constrained amount reassessed each reporting date.'},
-      {title:'Contract Balances (IFRS 15.105)',
-       content:'Contract liability (deferred revenue) = customer paid before entity transferred goods/services. Contract asset = entity transferred goods/services before customer paid (unbilled revenue — conditional right). Trade receivable = unconditional right to payment. All three disclosed separately per IFRS 15.105–107.'},
-    ]
+      {title:'Step 1–2: Contract & Performance Obligations (IFRS 15.9, 15.22)',
+       content:'Contract identified per IFRS 15.9 criteria: commercial substance, collectability probable, approved by parties, rights and payment terms identifiable. '+obs.length+' performance obligations identified. Each assessed as distinct per IFRS 15.22: (i) capable of being distinct — customer can benefit from it alone; (ii) separately identifiable — not highly interrelated with other promises.'},
+      {title:'Step 3: Transaction Price (IFRS 15.47–58)',
+       content:'Transaction price $'+fmtV(r0(totalTP))+' per contract. '+vcNotes+sfcNotes+'Constrained portfolio TP: $'+fmtV(r0(totalTP*nc))+'. Variable consideration includes performance bonuses, rebates, penalties; estimated using expected value (large volume) or most likely amount (binary outcome). Constraint applied where significant reversal risk exists (IFRS 15.57).'},
+      {title:'Step 4: Allocation — Relative SSP Method (IFRS 15.73)',
+       content:'Allocated at relative standalone selling prices per IFRS 15.73–74. '+obc.map(function(c,j){return 'PO'+(j+1)+' $'+fmtV(r0(c.alloc*nc))+' ('+r2(c.alloc/totalTP*100)+'%)';}).join('; ')+'. Observable SSP used where available; adjusted market assessment or cost-plus approach for remainder. Residual approach permissible only where SSP highly variable or uncertain (IFRS 15.78).'},
+      {title:'Step 5: Revenue Recognition (IFRS 15.31–38)',
+       content:'Over-time criteria (IFRS 15.35): (a) simultaneous consumption; (b) creates/enhances customer-controlled asset; (c) no alternative use AND enforceable right to payment. Methods: '+([...new Set(obs.filter(function(o){return o.timing==='over_time';}).map(function(o){return MNAMES[o.method]||o.method;}))].join(', ')||'N/A')+' for over-time; point-in-time on control transfer (IFRS 15.38) for remaining obligations.'},
+      {title:'Contract Balances (IFRS 15.105–107)',
+       content:'Contract liability (deferred revenue) Y1: $'+fmtV(totDef[0]||0)+' — customer paid before performance. Contract asset Y1: $'+fmtV(totCA[0]||0)+' — revenue recognised before unconditional right to payment. Roll-forward disclosure required (IFRS 15.118). Contract assets subject to IFRS 9 impairment testing.'},
+      {title:'Variable Consideration & Constraint (IFRS 15.50–58)',
+       content:vcGross>0?('VC identified for: '+obs.filter(function(o){return o.hasVarConsid;}).map(function(o){return o.name+' ($'+fmtV(o.varAmount)+')';}).join(', ')+'. Method(s): '+[...new Set(obs.filter(function(o){return o.hasVarConsid;}).map(function(o){return{expected_value:'Expected Value',most_likely:'Most Likely Amount'}[o.varMethod];}))].join('/')+'. Constrained amount $'+fmtV(r0(vcTotal*nc))+' vs gross $'+fmtV(r0(vcGross*nc))+'.'):('No variable consideration in current configuration.') },
+    ].concat(sfcTotal>0?[{title:'Significant Financing Component (IFRS 15.60–65)',content:'SFC identified for: '+obs.filter(function(o){return o.hasSFC;}).map(function(o){return o.name+' ('+o.sfcRate+'%/yr)';}).join(', ')+'. TP reduced by $'+fmtV(r0(sfcTotal*nc))+'. Financing component recognised as interest income/expense separately from IFRS 15 revenue. Practical expedient: SFC not required if payment expected within 12 months of delivery (IFRS 15.63).'}]:[])
+    .concat(ik==='telecom'?[{title:'Telecom: Bundled Contracts & Device Subsidies (IFRS 15.73, 15.60)',content:'Bundled device + service contracts require TP allocation at relative SSPs. Device recognised at point in time on delivery; service plans over contract term. Device subsidies trigger IFRS 15.62 SFC assessment. Usage-based overages = variable consideration (IFRS 15.52). Plan upgrades/downgrades: contract modification under IFRS 15.18–21 (prospective or cumulative catch-up). ARPU and subscriber metrics key to disaggregation disclosures (IFRS 15.114).'}]:[]),
   };
 }
 
@@ -4377,6 +4562,8 @@ function renderTable(d){
 function renderAssumptions(){
   var g=document.getElementById('ag');
   if(!g) return;
+  /* IFRS 15 has a fully custom dynamic panel */
+  if(_currentModelType==='IFRS15'){_renderIFRS15Assumptions();return;}
   var ae=document.activeElement;
   var editing=ae&&ae.classList&&ae.classList.contains('ai')&&g.contains(ae);
   var editKey=editing?ae.getAttribute('data-asm-key'):null;
@@ -4464,6 +4651,153 @@ function _asmCard(k,asm,isCustom){
   }
   return card;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   IFRS 15 Dynamic Assumptions Panel
+═══════════════════════════════════════════════════════════════════════ */
+function _renderIFRS15Assumptions(){
+  var g=document.getElementById('ag');
+  if(!g)return;
+  /* Check if same structure (same obligation IDs) */
+  var cards=g.querySelectorAll('.ifrs15-ob-card');
+  var cardIds=Array.from(cards).map(function(c){return String(c.dataset.obId);}).sort().join(',');
+  var obsIds=_IFRS15_OBS.map(function(o){return String(o.id);}).sort().join(',');
+  if(cardIds===obsIds&&g.dataset.ifrs15Loaded==='1'){
+    /* Fast-path: update values without rebuilding (preserves focus) */
+    var ae=document.activeElement;
+    /* Update scalar ASM inputs */
+    g.querySelectorAll('.ai[data-asm-key]').forEach(function(inp){
+      if(inp===ae)return;
+      var k=inp.getAttribute('data-asm-key');
+      if(!ASM[k])return;
+      if(inp.tagName==='SELECT'){if(String(inp.value)!==String(ASM[k].value))inp.value=ASM[k].value;}
+      else if(parseFloat(inp.value)!==parseFloat(ASM[k].value))inp.value=ASM[k].value;
+    });
+    /* Update obligation inputs */
+    _IFRS15_OBS.forEach(function(ob){
+      var card=g.querySelector('.ifrs15-ob-card[data-ob-id="'+ob.id+'"]');
+      if(!card)return;
+      card.querySelectorAll('[data-ob-field]').forEach(function(el){
+        if(el===ae)return;
+        var field=el.dataset.obField;
+        var val=ob[field];
+        if(val===undefined||val===null)return;
+        if(el.tagName==='SELECT'){if(String(el.value)!==String(val))el.value=val;}
+        else if(el.type==='text'){if(el.value!==String(val))el.value=String(val);}
+        else if(parseFloat(el.value)!==parseFloat(val))el.value=val;
+      });
+      /* Sync method card visibility based on current timing */
+      var mc=card.querySelector('.i15-meth-card');
+      if(mc)mc.style.display=ob.timing==='over_time'?'':'none';
+    });
+    return;
+  }
+  /* Full rebuild */
+  g.innerHTML='';
+  g.dataset.ifrs15Loaded='1';
+  /* Section 1: Model Settings */
+  var s1=document.createElement('div');s1.className='asm-section';
+  var h1=document.createElement('div');h1.className='asm-sec-hdr';h1.textContent='Model Settings';
+  s1.appendChild(h1);
+  var grid1=document.createElement('div');grid1.className='asm-grid';
+  ['industry','numContracts','subscriberBase','startYear','numYears'].forEach(function(k){
+    if(ASM[k])grid1.appendChild(_asmCard(k,ASM[k],false));
+  });
+  s1.appendChild(grid1);g.appendChild(s1);
+  /* Section 2: Performance Obligations */
+  var s2=document.createElement('div');s2.className='asm-section';
+  var h2=document.createElement('div');h2.className='ifrs15-sec-hdr';
+  var h2Lbl=document.createElement('span');h2Lbl.textContent='Performance Obligations ('+_IFRS15_OBS.length+')';
+  var addBtn=document.createElement('button');addBtn.className='ifrs15-add-btn';
+  addBtn.textContent='+ Add Obligation';
+  addBtn.onclick=function(){
+    _IFRS15_OBS.push({id:_i15NextId(),name:'New Obligation',timing:'point_in_time',method:'straight_line',ssp:500000,duration:1,costPct:40,growthRate:5,hasVarConsid:0,varMethod:'expected_value',varAmount:0,varConstrained:0,warrantyType:'none',hasSFC:0,sfcRate:0});
+    g.dataset.ifrs15Loaded='';_debounceRecompute();
+  };
+  h2.appendChild(h2Lbl);h2.appendChild(addBtn);s2.appendChild(h2);
+  _IFRS15_OBS.forEach(function(ob,idx){s2.appendChild(_buildObCard(ob,idx,g));});
+  g.appendChild(s2);
+}
+
+function _buildObCard(ob,idx,panelEl){
+  var card=document.createElement('div');
+  card.className='ifrs15-ob-card';card.dataset.obId=ob.id;
+  /* Header: badge + name + delete */
+  var hdr=document.createElement('div');hdr.className='ifrs15-ob-hdr';
+  var badge=document.createElement('span');badge.className='ifrs15-ob-num';badge.textContent='PO'+(idx+1);
+  var nameInp=document.createElement('input');nameInp.type='text';nameInp.className='ifrs15-ob-name';
+  nameInp.value=ob.name||'';nameInp.placeholder='Obligation name…';
+  nameInp.dataset.obId=ob.id;nameInp.dataset.obField='name';
+  nameInp.addEventListener('input',(function(id){return function(){
+    var x=_findOb(id);if(x)x.name=this.value;_debounceRecompute();
+  };})(ob.id));
+  var delBtn=document.createElement('button');delBtn.className='ifrs15-ob-del';delBtn.textContent='✕';delBtn.title='Remove';
+  delBtn.onclick=(function(id,panel){return function(){
+    if(_IFRS15_OBS.length<=1){showToast('At least one obligation required');return;}
+    _IFRS15_OBS=_IFRS15_OBS.filter(function(x){return x.id!==id;});
+    if(panel)panel.dataset.ifrs15Loaded='';
+    _debounceRecompute();
+  };})(ob.id,panelEl);
+  hdr.appendChild(badge);hdr.appendChild(nameInp);hdr.appendChild(delBtn);card.appendChild(hdr);
+  /* Fields grid */
+  var fg=document.createElement('div');fg.className='asm-grid';fg.style.marginTop='10px';
+  function selCard(lbl,field,opts,val,span){
+    var c=document.createElement('div');c.className='ac';if(span)c.style.gridColumn='span '+span;
+    var l=document.createElement('div');l.className='al';l.textContent=lbl;
+    var sel=document.createElement('select');sel.className='ai';
+    sel.dataset.obId=ob.id;sel.dataset.obField=field;
+    opts.forEach(function(opt){
+      var o=document.createElement('option');o.value=String(opt.v);o.textContent=opt.l;
+      if(String(opt.v)===String(val))o.selected=true;sel.appendChild(o);
+    });
+    sel.addEventListener('change',(function(id,fld){return function(){
+      var x=_findOb(id);if(!x)return;
+      var v=this.value;
+      if(fld==='hasVarConsid'||fld==='varConstrained'||fld==='hasSFC')v=parseInt(v)||0;
+      else if(!isNaN(parseFloat(v))&&fld!=='timing'&&fld!=='method'&&fld!=='varMethod'&&fld!=='warrantyType')v=parseFloat(v);
+      x[fld]=v;
+      if(fld==='timing'){var mc=card.querySelector('.i15-meth-card');if(mc)mc.style.display=this.value==='over_time'?'':'none';}
+      _debounceRecompute();
+    };})(ob.id,field));
+    c.appendChild(l);c.appendChild(sel);return c;
+  }
+  function numCard(lbl,field,val,unit,span){
+    var c=document.createElement('div');c.className='ac';if(span)c.style.gridColumn='span '+span;
+    var l=document.createElement('div');l.className='al';l.textContent=lbl;
+    var row=document.createElement('div');row.className='ar';
+    var inp=document.createElement('input');inp.type='number';inp.className='ai';inp.value=val;inp.step='any';
+    inp.dataset.obId=ob.id;inp.dataset.obField=field;
+    inp.addEventListener('input',(function(id,fld){return function(){
+      var v=parseFloat(this.value);if(isNaN(v))return;
+      var x=_findOb(id);if(x)x[fld]=v;_debounceRecompute();
+    };})(ob.id,field));
+    row.appendChild(inp);
+    if(unit){var u=document.createElement('span');u.className='au';u.textContent=unit;row.appendChild(u);}
+    c.appendChild(l);c.appendChild(row);return c;
+  }
+  /* Timing */
+  fg.appendChild(selCard('Timing','timing',[{v:'over_time',l:'Over Time'},{v:'point_in_time',l:'Point in Time'}],ob.timing,2));
+  /* Method — hidden when PiT */
+  var mCard=selCard('Over-Time Method','method',[{v:'straight_line',l:'Straight-Line'},{v:'cost_to_cost',l:'Cost-to-Cost (Input)'},{v:'output_milestones',l:'Output / Milestones'}],ob.method,2);
+  mCard.className+=' i15-meth-card';if(ob.timing!=='over_time')mCard.style.display='none';fg.appendChild(mCard);
+  /* Core financials */
+  fg.appendChild(numCard('SSP ($)','ssp',ob.ssp,'$'));
+  fg.appendChild(numCard('Duration','duration',ob.duration,'yrs'));
+  fg.appendChild(numCard('Direct Cost %','costPct',ob.costPct,'%'));
+  fg.appendChild(numCard('Growth Rate %','growthRate',ob.growthRate,'%'));
+  /* Variable consideration */
+  fg.appendChild(selCard('Var. Consideration','hasVarConsid',[{v:0,l:'None'},{v:1,l:'Yes'}],ob.hasVarConsid));
+  fg.appendChild(selCard('VC Method','varMethod',[{v:'expected_value',l:'Expected Value'},{v:'most_likely',l:'Most Likely Amount'}],ob.varMethod));
+  fg.appendChild(numCard('Var. Amount ($)','varAmount',ob.varAmount,'$'));
+  fg.appendChild(selCard('VC Constrained?','varConstrained',[{v:0,l:'No'},{v:1,l:'Yes'}],ob.varConstrained));
+  /* Warranty & SFC */
+  fg.appendChild(selCard('Warranty Type','warrantyType',[{v:'none',l:'None'},{v:'assurance',l:'Assurance (not PO)'},{v:'service_type',l:'Service-Type (PO)'}],ob.warrantyType));
+  fg.appendChild(selCard('Sig. Financing','hasSFC',[{v:0,l:'No'},{v:1,l:'Yes'}],ob.hasSFC));
+  fg.appendChild(numCard('SFC Rate %','sfcRate',ob.sfcRate,'%'));
+  card.appendChild(fg);return card;
+}
+
+function _findOb(id){return _IFRS15_OBS.filter(function(x){return x.id===id;})[0]||null;}
 
 function showAddAsmModal(){document.getElementById('addAsmModal').style.display='flex';document.getElementById('newAsmLabel').value='';document.getElementById('newAsmValue').value='';document.getElementById('newAsmUnit').value='';setTimeout(function(){document.getElementById('newAsmLabel').focus();},50);}
 function closeAddAsmModal(){document.getElementById('addAsmModal').style.display='none';}
@@ -4644,6 +4978,10 @@ function _getDashAllCharts(model, s) {
     {key:'inventory',  title:'Closing Inventory',         type:'area', color:'#86efac'},
     {key:'viu',        title:'Value in Use',              type:'bar',  color:'#0076A8'},
     {key:'csm',        title:'CSM Balance',               type:'line', color:'#a78bfa'},
+    /* IFRS 15 */
+    {key:'ifrs15Deferred',     title:'Deferred Revenue (Contract Liability)', type:'area', color:'#ff6b6b'},
+    {key:'ifrs15ContractAsset',title:'Contract Asset (Unbilled)',              type:'area', color:'#86BC25'},
+    {key:'ifrs15ARR',          title:'Annual Recurring Revenue (ARR)',         type:'bar',  color:'#00A3E0'},
   ];
   defs.forEach(function(d) {
     if(hasData(s[d.key])) {
@@ -4799,6 +5137,11 @@ function _extractSeries(model){
     /* IFRS7 */
     else if(/total credit risk exposure/.test(lbl))s.creditExp=vals;
     else if(/fx sensitivity|interest rate sensitivity/.test(lbl))s.sensitivity=vals;
+    /* IFRS 15 */
+    else if(/contract liability.*deferred|deferred revenue/.test(lbl))s.ifrs15Deferred=vals;
+    else if(/contract asset.*unbilled|unbilled revenue/.test(lbl))s.ifrs15ContractAsset=vals;
+    else if(/annual recurring revenue|^arr$/.test(lbl))s.ifrs15ARR=vals;
+    else if(/^total revenue recognised/.test(lbl))s.revenue=vals;
     /* Always store all rows in map for fallback */
     s.map[lbl]=vals;
   });
@@ -4883,6 +5226,16 @@ function _buildKPIs(model,s){
   function lastNonNull(arr){if(!arr)return null;var f=arr.filter(function(v){return v!==null&&!isNaN(v);});return f.length?f[f.length-1]:null;}
   function firstNonNull(arr){if(!arr)return null;var f=arr.filter(function(v){return v!==null&&!isNaN(v);});return f.length?f[0]:null;}
 
+  /* IFRS 15 — prioritised KPIs for revenue recognition model */
+  if(model.ifrsStandard==='IFRS 15'){
+    if(s.revenue){var v=firstNonNull(s.revenue);if(v!==null)kpis.push({label:'Revenue Y1',value:_shortNum(v)});}
+    if(s.revenue){var v=lastNonNull(s.revenue);if(v!==null)kpis.push({label:'Revenue (Latest)',value:_shortNum(v)});}
+    if(s.ifrs15Deferred){var v=firstNonNull(s.ifrs15Deferred);if(v!==null)kpis.push({label:'Deferred Rev. Y1',value:_shortNum(v)});}
+    if(s.ifrs15ContractAsset){var v=firstNonNull(s.ifrs15ContractAsset);if(v!==null)kpis.push({label:'Contract Asset Y1',value:_shortNum(v)});}
+    if(s.ifrs15ARR){var v=lastNonNull(s.ifrs15ARR);if(v!==null)kpis.push({label:'ARR (Latest)',value:_shortNum(v)});}
+    return kpis.slice(0,4);
+  }
+
   if(s.revenue){var v=lastNonNull(s.revenue);if(v!==null)kpis.push({label:'Latest Revenue',value:_shortNum(v)});}
   if(s.ebitda){var v=lastNonNull(s.ebitda);if(v!==null)kpis.push({label:'Latest EBITDA',value:_shortNum(v)});}
   if(s.ebitdaMgn){var v=lastNonNull(s.ebitdaMgn);if(v!==null)kpis.push({label:'EBITDA Margin',value:v+'%'});}
@@ -4915,7 +5268,7 @@ function _buildKPIs(model,s){
 function _trendTable(model){
   var rows=model.tableRows||[],hdrs=model.tableHeaders||[];
   var NC=hdrs.length-1;
-  var keyL=['Revenue','EBITDA','FCFF','Free Cash Flow to Firm','Net Profit','NOPAT','Closing NBV','Closing Lease Liability','Total ECL Allowance','Closing DBO','Enterprise Value','Exit Equity Value'];
+  var keyL=['Revenue','EBITDA','FCFF','Free Cash Flow to Firm','Net Profit','NOPAT','Closing NBV','Closing Lease Liability','Total ECL Allowance','Closing DBO','Enterprise Value','Exit Equity Value','Total Revenue Recognised','Gross Profit','Contract Liability','Contract Asset'];
   var picked=[];
   rows.forEach(function(row){
     if(picked.length>=5||!row.values||row.type==='section_header')return;
@@ -5498,6 +5851,26 @@ function _inferFormula(label){
       return generic('Contract Asset = Revenue recognised before unconditional right to payment (unbilled)','IFRS 15.107 — Contract asset when revenue exceeds billings (conditioned on further performance).',['Dr Contract Asset / Cr Revenue','Becomes trade receivable when right becomes unconditional (time only)']);
     if(l.indexOf('trade receivable')>=0&&l.indexOf('billed')>=0)
       return generic('Trade Receivable = Unconditional right to consideration (only time passing remains)','IFRS 15.108 — Receivable when only passage of time needed before payment is due.',['Dr Trade Receivable / Cr Contract Asset (reclassification when unconditional)']);
+    if(l.indexOf('total revenue recognised')>=0||l.indexOf('total revenue')>=0)
+      return generic('Total Revenue Recognised = Sum of all PO revenues in period','IFRS 15.9 — Revenue recognised = sum across all performance obligations satisfied in period.',['Weighted by relative SSP allocation','Cohort model: contributions from all contracts signed up to period p']);
+    if(/po\d+.*allocated|allocated.*\d+%/.test(l))
+      return generic('Allocated Amount = SSP_i / Sum(SSP) × Transaction Price','IFRS 15.74 — Relative SSP method: each PO allocated proportionally to its standalone selling price.',['SSP_i = standalone price for obligation i','If TP < Sum(SSP) = bundle discount allocated proportionally']);
+    if(/po\d+.*direct cost|direct cost.*\d+%/.test(l))
+      return generic('Direct Costs = Revenue Recognised × Cost %','IFRS 15.95 — Costs that relate directly to delivering the performance obligation.',['Costs to obtain (sales commissions) capitalised if >12-month benefit period (IFRS 15.91)','Costs to fulfil capitalised if directly related, generate resources, expected to recover']);
+    if(l.indexOf('gross profit')>=0)
+      return generic('Gross Profit = Total Revenue Recognised − Total Direct Costs','P&L: Gross profit margin reflects cost efficiency per obligation.',['Margin % = Gross Profit / Revenue × 100','Comparison across obligations reveals most/least profitable POs']);
+    if(l.indexOf('remaining pos')>=0||l.indexOf('backlog')>=0)
+      return generic('Remaining Performance Obligations (Backlog) = Total TP − Cumulative Revenue','IFRS 15.120 — Disclose aggregate amount of TP allocated to unsatisfied POs.',['Required for contracts > 1 year with remaining unsatisfied POs','Practical expedient: exclude POs expected within 12 months (IFRS 15.121)']);
+    if(l.indexOf('arpu')>=0)
+      return generic('ARPU = Revenue / Subscriber Base / 12 (Monthly)','Telecom KPI: Average Revenue Per User per month.',['Blended ARPU includes all revenue types; Service ARPU excludes device revenue','IFRS 15: bundled contract revenue allocated by relative SSP before ARPU calculation']);
+    if(l.indexOf('annual recurring revenue')>=0||l.indexOf('arr')>=0)
+      return generic('ARR = Sum of Over-Time Obligation Revenue Per Year','SaaS/Telecom KPI: measures predictable recurring contract value.',['ARR = MRR × 12 (for monthly-billed contracts)','Excludes point-in-time (non-recurring) revenues']);
+    if(l.indexOf('churn rate')>=0)
+      return generic('Churn Rate = % of customers/contracts lost in period','KPI for SaaS, Telecom: tracks customer retention.',['Gross Churn = contracts lost / opening contracts × 100','Net Revenue Retention = (ARR + expansions − churn) / opening ARR × 100']);
+    if(l.indexOf('net revenue retention')>=0)
+      return generic('Net Revenue Retention = (Opening ARR + Expansions − Churn) / Opening ARR × 100','SaaS KPI: measures revenue quality including expansion revenue.',['NRR > 100% means expansion exceeds churn','Best-in-class SaaS NRR typically 110–130%']);
+    if(l.indexOf('% completion')>=0||l.indexOf('cost-to-cost')>=0)
+      return generic('% Completion = Cumulative Costs Incurred / Total Expected Costs','IFRS 15.B15 — Input method: progress measured by costs incurred relative to total expected costs.',['Used for construction / long-term manufacturing contracts','Revenue = Allocated Price × % Completion']);
     if(l.indexOf('incremental costs to obtain')>=0||l.indexOf('capitalised')>=0&&l.indexOf('cost')>=0)
       return generic('Costs to Obtain = Incremental costs of obtaining a contract (sales commissions)','IFRS 15.91 — Capitalise if expected to recover over contract (>12 months); practical expedient to expense if ≤12 months.',['Amortised over expected customer relationship period','Impairment tested annually']);
     if(l.indexOf('amortisation of contract costs')>=0)
@@ -5652,9 +6025,16 @@ function _inferFormula(label){
 
   // ══════════════════════ DCF Valuation ══════════════════════════
   if(s.indexOf('dcf')>=0||s.indexOf('discounted cash flow')>=0){
-    var wacc=av('wacc',10)/100,g=av('tgr',2.5)/100,rev1=av('rev1',100),rg=av('revGrowth',8)/100;
+    /* Calculate WACC from CAPM components — mirrors computeDCF exactly */
+    var dcfKe    = av('riskFreeRate',4.5)/100 + av('beta',1.1) * (av('equityRiskPremium',5.5)/100);
+    var dcfKdAt  = av('costOfDebt',6)/100 * (1 - av('taxRate',28)/100);
+    var dcfWd    = Math.min(Math.max(av('debtWeight',30)/100, 0), 1);
+    var dcfWe    = 1 - dcfWd;
+    var dcfWaccCalc = dcfKe * dcfWe + dcfKdAt * dcfWd;
+    var dcfWacc  = av('waccOverride',0) > 0 ? av('waccOverride',0)/100 : dcfWaccCalc;
+    var g=av('tgr',3.0)/100,rev1=av('baseRevenue',50000000),rg=av('revGrowthY1',20)/100;
     if(l.indexOf('revenue')>=0&&l.indexOf('ev if')<0)
-      return generic('Revenue = Prior Year Revenue × (1 + Growth Rate)','DCF projection: revenue drivers determine intrinsic value.',['Year 1 Revenue = $'+fmtN(rev1)+'M × (1+'+fmtP(Math.round(rg*1000)/10)+')','Supported by market analysis, capacity, pricing assumptions']);
+      return generic('Revenue = Prior Year Revenue × (1 + Growth Rate)','DCF projection: revenue drivers determine intrinsic value.',['Year 1 Revenue = $'+fmtN(rev1)+' × (1+'+fmtP(Math.round(rg*1000)/10)+')','Supported by market analysis, capacity, pricing assumptions']);
     if(l.indexOf('ebitda')>=0&&l.indexOf('margin')<0&&l.indexOf('ev if')<0&&l.indexOf('add')<0)
       return generic('EBITDA = Revenue × EBITDA Margin %','Cash flow proxy before capital structure and accounting adjustments.',['EBITDA = Revenue × Margin %','Margin assumptions benchmarked against peers and historical performance']);
     if(l.indexOf('ebitda margin')>=0)
@@ -5676,11 +6056,11 @@ function _inferFormula(label){
     if(l.indexOf('free cash flow to firm')>=0||l.indexOf('fcff')>=0)
       return generic('FCFF = NOPAT + D&A − CapEx − ΔNWC','Cash available to all capital providers (equity + debt).',['= EBITDA(1-t) + D&A×t − CapEx − ΔNWC (simplified)','Pre-debt service; this is why discounted at WACC not Ke']);
     if(l.indexOf('discount factor')>=0&&l.indexOf('wacc')>=0)
-      return generic('Discount Factor = 1 / (1 + WACC)^t','Converts future FCFF to present value.',['WACC = '+fmtP(Math.round(wacc*1000)/10),'Year t factor = 1/(1+'+fmtP(Math.round(wacc*1000)/10)+')^t']);
-    if(l.indexOf('pv of fcff')>=0)
-      return generic('PV of FCFF = FCFF_t × Discount Factor_t','Each year\'s free cash flow discounted back to present value.',['Σ PV(FCFF) = sum of discounted free cash flows for projection period']);
+      return generic('Discount Factor = 1 / (1 + WACC)^t','Converts future FCFF to present value.',['WACC = '+fmtP(Math.round(dcfWacc*1000)/10),'Year t factor = 1/(1+'+fmtP(Math.round(dcfWacc*1000)/10)+')^t']);
+    if(l.indexOf('pv of fcff')>=0||l.indexOf('pv of ufcf')>=0)
+      return generic('PV of UFCF = UFCF_t / (1 + WACC)^t  [WACC = '+fmtP(Math.round(dcfWacc*1000)/10)+']','Each year\'s unlevered free cash flow discounted back to present value.',['WACC used = '+fmtP(Math.round(dcfWacc*1000)/10)+' (Ke×'+fmtP(Math.round(dcfWe*1000)/10)+' + Kd_AT×'+fmtP(Math.round(dcfWd*1000)/10)+')','Σ PV(UFCF) = sum of discounted free cash flows for projection period']);
     if(l.indexOf('terminal value')>=0&&l.indexOf('gordon')>=0||l.indexOf('terminal value — undiscounted')>=0)
-      return generic('Terminal Value = Final FCFF × (1+g) / (WACC − g)  [Gordon Growth]','Terminal value represents value beyond explicit forecast period (often >60% of EV).',['TV = FCFF_n × (1+'+fmtP(Math.round(g*1000)/10)+') / ('+fmtP(Math.round(wacc*1000)/10)+' − '+fmtP(Math.round(g*1000)/10)+')','Growth rate ≤ long-run GDP growth (sustainability constraint)']);
+      return generic('Terminal Value = Final FCFF × (1+g) / (WACC − g)  [Gordon Growth]','Terminal value represents value beyond explicit forecast period (often >60% of EV).',['TV = FCFF_n × (1+'+fmtP(Math.round(g*1000)/10)+') / ('+fmtP(Math.round(dcfWacc*1000)/10)+' − '+fmtP(Math.round(g*1000)/10)+')','Growth rate ≤ long-run GDP growth (sustainability constraint)']);
     if(l.indexOf('pv of terminal value')>=0)
       return generic('PV of TV = Terminal Value ÷ (1+WACC)^n','TV discounted back from year n to today.',['PV(TV) / EV ratio shows sensitivity to terminal assumptions']);
     if(l.indexOf('enterprise value')>=0&&l.indexOf('ev if')<0&&l.indexOf('entry')<0&&l.indexOf('exit')<0)
@@ -6317,72 +6697,730 @@ function exportCSV(){
   _dl(rows.join('\n'),'text/csv',_fn()+'.csv');
 }
 
-function exportExcelFormula(){
-  if(!M){showErr('No model loaded.');return;}
-  if(typeof XLSX==='undefined'){showErr('SheetJS not loaded — retry in 2s.');return;}
-  var wb=XLSX.utils.book_new();
-
-  /* Sheet 1: Assumptions */
-  var asmKeys=Object.keys(ASM);
-  var asmAOA=[[M.modelType+' — Assumptions','','',''],['Parameter','Key','Value','Unit']];
-  asmKeys.forEach(function(k){asmAOA.push([ASM[k].label,k,parseFloat(ASM[k].value)||0,ASM[k].unit||'']);});
-  if(Object.keys(_USER_ASM).length){asmAOA.push(['','','','']);asmAOA.push(['Custom Assumptions','','','']);Object.keys(_USER_ASM).forEach(function(k){asmAOA.push([_USER_ASM[k].label,k,parseFloat(_USER_ASM[k].value)||0,_USER_ASM[k].unit||'']);});}
-  var asmWS=XLSX.utils.aoa_to_sheet(asmAOA);asmWS['!cols']=[{wch:40},{wch:22},{wch:16},{wch:10}];asmWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:3}}];
-  XLSX.utils.book_append_sheet(wb,asmWS,'Assumptions');
-
-  /* Sheet 2: Model Output */
-  var hdrs=M.tableHeaders||[],NC=hdrs.length-1;
-  var mAOA=[],SRmap={};
-  var title=[M.modelType||''];for(var z=1;z<=NC;z++)title.push('');mAOA.push(title);
-  var desc=[M.description||''];for(var z2=1;z2<=NC;z2++)desc.push('');mAOA.push(desc);
-  mAOA.push(Array(hdrs.length).fill(''));mAOA.push(hdrs.slice());
-  var HR=4;
-  (M.tableRows||[]).forEach(function(row,ri){
-    var t=row.type||'data';
-    if(t==='section_header'){var sr=[row.label||''];for(var z3=0;z3<NC;z3++)sr.push('');mAOA.push(sr);return;}
-    var outRow=[row.label||''];
-    (row.values||[]).forEach(function(v,ci){
-      var ok=ri+':'+ci;if(_cellOverrides[ok]!==undefined)v=_cellOverrides[ok];
-      if(v===null||v===undefined||v==='—'){outRow.push('');return;}
-      if(row.format==='text'||isNaN(parseFloat(String(v)))){outRow.push(String(v));return;}
-      var numV=parseFloat(String(v).replace(/,/g,''));
-      if(t==='total'||t==='subtotal'){
-        var colL=XLSX.utils.encode_col(ci+1),parts=[];
-        for(var ri2=ri-1;ri2>=0;ri2--){
-          if((M.tableRows[ri2]||{}).type==='section_header')break;
-          var rt2=(M.tableRows[ri2]||{}).type||'data';
-          if(rt2==='data'&&SRmap[ri2])parts.push(colL+SRmap[ri2]);
-        }
-        outRow.push(parts.length?{f:'SUM('+parts.join(',')+')'}:numV);
-      }else outRow.push(isNaN(numV)?'':numV);
-    });
-    SRmap[ri]=HR+mAOA.length-3+1;
-    mAOA.push(outRow);
-  });
-  var mWS=XLSX.utils.aoa_to_sheet(mAOA);
-  var cols=[{wch:44}];for(var cx=0;cx<NC;cx++)cols.push({wch:16});mWS['!cols']=cols;
-  mWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:NC}},{s:{r:1,c:0},e:{r:1,c:NC}}];
-  mWS['!freeze']={xSplit:1,ySplit:HR,topLeftCell:'B'+(HR+1),state:'frozen'};
-  XLSX.utils.book_append_sheet(wb,mWS,'Model Output');
-
-  /* Sheet 3: Analysis */
-  var an=M.analysis||{};var anAOA=[[M.modelType+' — Analysis','']];anAOA.push([M.description||'','']);anAOA.push(['','']);
-  if(an.summary){anAOA.push(['EXECUTIVE SUMMARY','']);anAOA.push([an.summary,'']);}anAOA.push(['','']);
-  if(an.keyFindings&&an.keyFindings.length){anAOA.push(['KEY FINDINGS','']);an.keyFindings.forEach(function(f){anAOA.push(['• '+f,'']);});}anAOA.push(['','']);
-  if(an.risks&&an.risks.length){anAOA.push(['KEY RISKS','']);an.risks.forEach(function(r){anAOA.push(['⚠ '+r,'']);});}anAOA.push(['','']);
-  if(an.recommendations&&an.recommendations.length){anAOA.push(['RECOMMENDATIONS','']);an.recommendations.forEach(function(r){anAOA.push(['✓ '+r,'']);});}
-  var anWS=XLSX.utils.aoa_to_sheet(anAOA);anWS['!cols']=[{wch:28},{wch:100}];anWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}},{s:{r:1,c:0},e:{r:1,c:1}}];
-  XLSX.utils.book_append_sheet(wb,anWS,'Analysis');
-
-  /* Sheet 4: IFRS Notes */
-  var notes=M.ifrsNotes||[];
-  if(notes.length){
-    var nAOA=[[M.ifrsStandard+' — Disclosure Notes','']];
-    notes.forEach(function(n,i){nAOA.push(['','']);nAOA.push(['Note '+(i+1)+': '+n.title,'']);var c=n.content||'';while(c.length>100){var cut=c.lastIndexOf(' ',100);if(cut<60)cut=100;nAOA.push([c.slice(0,cut),'']);c=c.slice(cut+1);}if(c)nAOA.push([c,'']);});
-    var nWS=XLSX.utils.aoa_to_sheet(nAOA);nWS['!cols']=[{wch:30},{wch:110}];nWS['!merges']=[{s:{r:0,c:0},e:{r:0,c:1}}];
-    XLSX.utils.book_append_sheet(wb,nWS,'IFRS Notes');
+/* ─── Excel percentage formula inference helper ─── */
+function _inferPctFormula(label, lMap) {
+  if (!label) return null;
+  var l = label.toLowerCase().trim();
+  /* Find first row whose normalised label contains any of the patterns.
+     Patterns shorter than 3 chars are skipped to avoid spurious substring matches. */
+  function fnd(pats) {
+    for (var i = 0; i < pats.length; i++) {
+      var p = pats[i].toLowerCase();
+      if (p.length < 3) continue; /* guard: very short strings cause false positives */
+      for (var k in lMap) { if (k.indexOf(p) >= 0) return lMap[k]; }
+    }
+    return null;
   }
-  XLSX.writeFile(wb,_fn()+'.xlsx');showToast('Excel exported ✓ — '+_fn()+'.xlsx');
+  var revR = fnd(['revenue','total revenue','net revenue','insurance revenue','net earned premium','sales']);
+  var m;
+  /* Effective Tax Rate */
+  if (/effective tax rate/.test(l)) {
+    var tR = fnd(['income tax expense','tax expense','deferred tax charge']);
+    var pR = fnd(['profit before tax','pre-tax','pbt']);
+    if (tR && pR) return {fml: tR + '/' + pR, neg: true, mul100: true};
+  }
+  /* Leverage multiple (no ×100 — it is already a multiple e.g. 3.5×) */
+  if (/leverage/.test(l) && /debt|ebitda/.test(l)) {
+    var dbR = fnd(['total debt','net debt','closing debt','senior debt','total borrowings']);
+    var ebR = fnd(['ebitda','↳ ebitda']);
+    if (dbR && ebR) return {fml: dbR + '/' + ebR, neg: false, mul100: false};
+  }
+  /* Interest Coverage multiple (no ×100) */
+  if (/interest coverage/.test(l)) {
+    var eb2 = fnd(['ebitda','↳ ebitda']);
+    var in2 = fnd(['finance costs','interest expense','net interest expense','financing cost']);
+    if (eb2 && in2) return {fml: eb2 + '/' + in2, neg: true, mul100: false};
+  }
+  /* Funded Ratio */
+  if (/funded ratio/.test(l)) {
+    var aR = fnd(['closing fair value of plan assets','closing fair value','plan assets']);
+    var dboR = fnd(['closing dbo','defined benefit obligation']);
+    if (aR && dboR) return {fml: aR + '/' + dboR, neg: false, mul100: true};
+  }
+  /* EBITDA Margin % explicit (handle ↳ prefix) */
+  if (/ebitda margin/.test(l)) {
+    var ebM = fnd(['↳ ebitda','ebitda']);
+    if (ebM && revR && ebM !== revR) return {fml: ebM + '/' + revR, neg: false, mul100: true};
+  }
+  /* "X as % of Y" */
+  m = l.match(/^(.+?)\s+as\s+%\s+of\s+(.+?)(%?)$/);
+  if (m) {
+    var n2 = fnd([m[1].trim()]), d2 = fnd([m[2].trim()]);
+    if (n2 && d2 && n2 !== d2) return {fml: n2 + '/' + d2, neg: false, mul100: true};
+  }
+  /* "X Margin %" — generic with synonym fallbacks for common metrics */
+  m = l.match(/^(.*?)\s+margin\s*%?$/);
+  if (m && m[1].length > 2) {
+    var mKey = m[1].trim().toLowerCase();
+    var nm = fnd([mKey]);
+    /* Synonym fallbacks: "net profit" → "profit after tax"; "operating" → "ebit"; "gross" → "gross profit" */
+    if (!nm && /net profit|net income/.test(mKey)) nm = fnd(['profit after tax','net income after','pat margin','net profit']);
+    if (!nm && /^operating/.test(mKey)) nm = fnd(['operating profit','ebit','ebt']);
+    if (!nm && /^gross/.test(mKey)) nm = fnd(['gross profit','gross income']);
+    if (!nm && /ufcf|unlevered free cash/.test(mKey)) nm = fnd(['unlevered free cash','ufcf','fcff']);
+    if (nm && revR && nm !== revR) return {fml: nm + '/' + revR, neg: false, mul100: true};
+  }
+  /* Revenue Growth % / EBITDA Growth % etc. */
+  m = l.match(/^(.*?)\s+growth\s*%?$/);
+  if (m && m[1].length > 2) {
+    var gKey = m[1].trim().toLowerCase();
+    var baseR = fnd([gKey]);
+    /* Synonym fallbacks */
+    if (!baseR && /ebitda/.test(gKey)) baseR = fnd(['↳ ebitda','ebitda']);
+    if (!baseR && /revenue|sales/.test(gKey)) baseR = fnd(['revenue','total revenue','net revenue']);
+    if (baseR) return {fml: '__GROWTH__:' + baseR, neg: false, mul100: true};
+  }
+  return null;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   MODEL-SPECIFIC COMPUTED FORMULA GENERATOR
+   Returns an Excel formula string for a given computed row, or null.
+   mt  = model type string (M.modelType)
+   nl  = normalised (lowercase trimmed) row label
+   ci  = column index (0 = first period column)
+   CA  = current column letter (e.g. 'B')
+   prevCA = prior column letter (e.g. 'A' — empty/ignored for ci=0)
+   rowMap = complete {label:excelRowNumber} map (pre-built before writing)
+   asmRefMap = {asmKey:'Assumptions!C{row}'} map
+   NC  = number of data columns
+════════════════════════════════════════════════════════════════ */
+function _getComputedFormula(mt,nl,ci,CA,prevCA,rowMap,asmRefMap,NC){
+  if(!mt||!nl)return null;
+  var mtu=mt.toLowerCase();
+  var p=ci+1;
+  function colL(n){var s='';while(n>0){var r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=Math.floor((n-1)/26);}return s;}
+  function R(lbl){var lo=lbl.toLowerCase().trim();if(rowMap[lo]!==undefined)return CA+rowMap[lo];for(var k in rowMap){if(k.length>=4&&lo.length>=4&&k.indexOf(lo)===0)return CA+rowMap[k];}return null;}
+  function Rp(lbl){if(ci<=0)return null;var lo=lbl.toLowerCase().trim();if(rowMap[lo]!==undefined)return prevCA+rowMap[lo];for(var k in rowMap){if(k.length>=4&&lo.length>=4&&k.indexOf(lo)===0)return prevCA+rowMap[k];}return null;}
+  function Rc(lbl,col){var lo=lbl.toLowerCase().trim();if(rowMap[lo]!==undefined)return col+rowMap[lo];for(var k in rowMap){if(k.length>=4&&lo.length>=4&&k.indexOf(lo)===0)return col+rowMap[k];}return null;}
+  function A(key){return asmRefMap[key]||null;}
+  /* Build cross-section row sum: sum columns 1..(NC-1) in same row — for total columns */
+  function rowSum(rowNum){var pts=[];for(var _c=2;_c<NC+1;_c++)pts.push(colL(_c)+rowNum);return'='+pts.join('+');}
+  var k;
+
+  /* ─── DCF ─── */
+  if(mtu.indexOf('dcf')>=0){
+    var gk='revGrowthY'+Math.min(p,5);
+    if(nl==='revenue'){var br=A('baseRevenue'),gr=A(gk)||A('revGrowthY5');if(ci===0&&br&&gr)return'='+br+'*(1+'+gr+'/100)';if(ci>0&&gr){var pv=Rp('revenue');if(pv)return'='+pv+'*(1+'+gr+'/100)';}}
+    if(nl==='ebitda'){var mk='ebitdaMgnY'+Math.min(p,5),mr=A(mk)||A('ebitdaMgnY5'),rv=R('revenue');if(rv&&mr)return'='+rv+'*'+mr+'/100';}
+    if(nl.indexOf('(-) depreciation')===0){var rv2=R('revenue'),dap=A('daPercent');if(rv2&&dap)return'=-'+rv2+'*'+dap+'/100';}
+    if(nl==='ebit'){var er=R('ebitda'),dr=null;for(k in rowMap){if(k.indexOf('(-) depreciation')===0){dr=CA+rowMap[k];break;}}if(er&&dr)return'='+er+'+'+dr;}
+    if(nl.indexOf('(-) taxes on ebit')===0){var er2=R('ebit'),tx=A('taxRate');if(er2&&tx)return'=IF('+er2+'>0,-'+er2+'*'+tx+'/100,0)';}
+    if(nl==='nopat (net operating profit after tax)'){var er3=R('ebit'),txr=null;for(k in rowMap){if(k.indexOf('(-) taxes on ebit')===0){txr=CA+rowMap[k];break;}}if(er3&&txr)return'='+er3+'+'+txr;}
+    if(nl==='(+) add back d&a'){var dar=null;for(k in rowMap){if(k.indexOf('(-) depreciation')===0){dar=CA+rowMap[k];break;}}if(dar)return'=-'+dar;}
+    if(nl==='(-) capital expenditure'){var rv3=R('revenue'),cp=A('capexPercent');if(rv3&&cp)return'=-'+rv3+'*'+cp+'/100';}
+    if(nl==='(-) change in net working capital'){var rv4=R('revenue'),nw=A('nwcPercent'),base=A('baseRevenue');if(ci===0&&rv4&&nw&&base)return'=-('+rv4+'-'+base+')*'+nw+'/100';if(ci>0&&rv4&&nw){var prv=Rp('revenue');if(prv)return'=-('+rv4+'-'+prv+')*'+nw+'/100';}}
+    if(nl==='= unlevered free cash flow (ufcf)'){var np=R('nopat (net operating profit after tax)'),db=null,cp2=R('(-) capital expenditure'),nw2=R('(-) change in net working capital');for(k in rowMap){if(k.indexOf('(+) add back d&a')===0){db=CA+rowMap[k];break;}}if(np&&cp2&&nw2){var ps=[np];if(db)ps.push(db);ps.push(cp2);ps.push(nw2);return'='+ps.join('+');}}
+    if(nl.indexOf('discount factor')===0&&nl.indexOf('[1/(1+wacc)')>=0){var rf=A('riskFreeRate'),be=A('beta'),ep=A('equityRiskPremium'),kd=A('costOfDebt'),tx2=A('taxRate'),dw=A('debtWeight'),wo=A('waccOverride');if(rf&&be&&ep&&kd&&tx2&&dw&&wo){var wf='IF('+wo+'>0,'+wo+'/100,('+rf+'/100+'+be+'*'+ep+'/100)*(1-'+dw+'/100)+'+kd+'/100*(1-'+tx2+'/100)*'+dw+'/100)';return'=1/(1+'+wf+')^'+p;}}
+    if(nl==='pv of ufcf'){var uf=R('= unlevered free cash flow (ufcf)'),df=null;for(k in rowMap){if(k.indexOf('discount factor')===0&&k.indexOf('[1/(1+wacc)')>=0){df=CA+rowMap[k];break;}}if(uf&&df)return'='+uf+'*'+df;}
+    if(nl==='sum of pv(ufcf)'&&ci===NC-1){var pvr=null;for(k in rowMap){if(k==='pv of ufcf'){pvr=rowMap[k];break;}}if(pvr){var _sc=[];for(var _c2=2;_c2<=NC+1;_c2++)_sc.push(colL(_c2)+pvr);return'='+_sc.join('+');}}
+    if(nl==='pv of terminal value'){var tv=R('terminal value —'),df2=null;for(k in rowMap){if(k.indexOf('discount factor')===0){df2=CA+rowMap[k];break;}}if(tv&&df2)return'='+tv+'*'+df2;}
+    if(nl==='enterprise value (ev)'){var _spv=R('sum of pv(ufcf)'),_pvtv=R('pv of terminal value');if(_spv&&_pvtv)return'='+_spv+'+'+_pvtv;}
+    if(nl==='= equity value'){var ev=R('enterprise value (ev)'),db2=R('(-) total debt'),cs=R('(+) cash & equivalents'),mi=R('(-) minority interest');if(ev&&db2&&cs&&mi)return'='+ev+'+'+db2+'+'+cs+'+'+mi;}
+    if(nl==='implied share price (usd)'){var eq=R('= equity value'),sh=R('diluted shares outstanding');if(eq&&sh)return'=IF('+sh+'>0,'+eq+'/'+sh+',0)';}
+  }
+
+  /* ─── IAS 36 (Impairment) ─── */
+  if(mtu.indexOf('ias 36')>=0||mtu.indexOf('impairment test')>=0){
+    if(nl==='revenue'){var r136=A('rev1'),rg36=A('revGrowth');if(ci===0&&r136)return'='+r136;if(ci>0&&rg36){var pr36=Rp('revenue');if(pr36)return'='+pr36+'*(1+'+rg36+'/100)';}}
+    if(nl==='ebitda'){var rv5=R('revenue'),em2=A('ebitdaMgn');if(rv5&&em2)return'='+rv5+'*'+em2+'/100';}
+    if(nl==='depreciation & amortisation'){var rv6=R('revenue'),da2=A('daRatio');if(rv6&&da2)return'=-'+rv6+'*'+da2+'/100';}
+    if(nl==='ebit'){var eb=R('ebitda'),da3=R('depreciation & amortisation');if(eb&&da3)return'='+eb+'+'+da3;}
+    if(nl.indexOf('tax on ebit')===0){var eb2=R('ebit'),tx3=A('taxRate');if(eb2&&tx3)return'=IF('+eb2+'>0,-'+eb2+'*'+tx3+'/100,0)';}
+    if(nl==='nopat (net operating profit after tax)'){var eb3=R('ebit'),txr2=null;for(k in rowMap){if(k.indexOf('tax on ebit')===0){txr2=CA+rowMap[k];break;}}if(eb3&&txr2)return'='+eb3+'+'+txr2;}
+    if(nl==='add back: d&a'){var da4=R('depreciation & amortisation');if(da4)return'=-'+da4;}
+    if(nl==='less: capital expenditure'){var rv7=R('revenue'),cr=A('capexRatio');if(rv7&&cr)return'=-'+rv7+'*'+cr+'/100';}
+    if(nl==='less: working capital increase'){var rv8=R('revenue'),wr=A('wcRatio');if(rv8&&wr)return'=-'+rv8+'*'+wr+'/100';}
+    if(nl==='free cash flow (fcff)'){var np2=R('nopat (net operating profit after tax)'),da5=R('add back: d&a'),cp3=R('less: capital expenditure'),wc=R('less: working capital increase');if(np2){var ps2=[np2];if(da5)ps2.push(da5);if(cp3)ps2.push(cp3);if(wc)ps2.push(wc);return'='+ps2.join('+');}}
+    if(nl.indexOf('pre-tax discount factor')===0){var wa=A('wacc');if(wa)return'=1/(1+'+wa+'/100)^'+p;}
+    if(nl==='present value of fcff'){var fc=R('free cash flow (fcff)'),df3=null;for(k in rowMap){if(k.indexOf('pre-tax discount factor')===0){df3=CA+rowMap[k];break;}}if(fc&&df3)return'='+fc+'*'+df3;}
+    if(nl==='pv of terminal value'){var tv2=R('terminal value — undiscounted'),df4=null;for(k in rowMap){if(k.indexOf('pre-tax discount factor')===0){df4=CA+rowMap[k];break;}}if(tv2&&df4)return'='+tv2+'*'+df4;}
+    if(nl==='sum of pv of projected cash flows'&&ci===NC-1){var pvr36=null;for(k in rowMap){if(k==='present value of fcff'){pvr36=rowMap[k];break;}}if(pvr36){var _sc36=[];for(var _c3=2;_c3<=NC+1;_c3++)_sc36.push(colL(_c3)+pvr36);return'='+_sc36.join('+');}}
+    if(nl==='value in use (viu)'){var spr=R('sum of pv of projected cash flows'),pvt=R('pv of terminal value');if(spr&&pvt)return'='+spr+'+'+pvt;}
+    if(nl==='carrying amount of cgu'){if(A('carrying'))return'='+A('carrying');}
+  }
+
+  /* ─── IAS 16 (PP&E) ─── */
+  if(mtu.indexOf('ias 16')>=0){
+    if(nl==='depreciation charge — current year'||nl==='depreciation charge'){var co=A('assetCost'),rv9=A('residual'),li=A('usefulLife'),bc=A('borrowCost');if(co&&rv9&&li&&bc)return'=-('+co+'+'+bc+'-'+rv9+')/'+li;}
+    if(nl==='closing gross carrying amount'){var _ogca=null,_acex=null,_abc=null,_disp=null;for(k in rowMap){if(k.indexOf('opening gross carrying amount')===0){_ogca=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('additions — capital expenditure')===0){_acex=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('additions — borrowing costs')===0){_abc=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('disposals at cost')===0){_disp=CA+rowMap[k];break;}}if(_ogca&&_acex&&_abc&&_disp)return'='+_ogca+'+'+_acex+'+'+_abc+'+'+_disp;if(_ogca&&_acex)return'='+_ogca+'+'+_acex;}
+    if(nl==='closing accumulated depreciation'){var _oadep=null,_dcyr=null,_impa=null;for(k in rowMap){if(k.indexOf('opening accumulated depreciation')===0){_oadep=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('depreciation charge')===0){_dcyr=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('impairment loss')===0){_impa=CA+rowMap[k];break;}}if(_oadep&&_dcyr&&_impa)return'='+_oadep+'+'+_dcyr+'+'+_impa;if(_oadep&&_dcyr)return'='+_oadep+'+'+_dcyr;}
+    if(nl==='closing nbv'){var cc=R('closing gross carrying amount'),cad=R('closing accumulated depreciation');if(cc&&cad)return'='+cc+'+'+cad;}
+    if(nl==='opening nbv'&&ci===0){var oc=R('opening gross carrying amount'),oa=R('opening accumulated depreciation');if(oc&&oa)return'='+oc+'+'+oa;}
+    if(nl==='remaining useful life (years)'){var la=A('usefulLife');if(la)return'=MAX(0,'+la+'-'+p+')';}
+    if(nl==='impairment loss (ias 36)'){var imp=A('impairY3');if(imp)return'=IF('+p+'=3,'+imp+',0)';}
+    if(nl==='impairment loss'){var imp2=A('impairY3');if(imp2)return'=IF('+p+'=3,'+imp2+',0)';}
+  }
+
+  /* ─── IFRS 16 (Lease) ─── */
+  if(mtu.indexOf('ifrs 16')>=0){
+    if(nl.indexOf('interest accretion')===0){var ol=R('opening lease liability'),ib=A('ibr');if(ol&&ib)return'='+ol+'*'+ib+'/100';}
+    if(nl.indexOf('depreciation — straight-line')===0){var lt=A('leaseTerm'),ir=Rc('initial recognition (commencement)','B');if(ci===0&&ir&&lt)return'=-'+ir+'/'+lt;if(ci>0){var drr=null;for(k in rowMap){if(k.indexOf('depreciation — straight-line')===0){drr='B'+rowMap[k];break;}}if(drr)return'='+drr;}}
+    if(nl==='closing rou asset'){var _orr=null,_dp=null;for(k in rowMap){if(k.indexOf('opening rou asset')>=0&&k.indexOf('opening rou')===0){_orr=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('depreciation — straight-line')===0){_dp=CA+rowMap[k];break;}}if(_orr&&_dp)return'='+_orr+'+'+_dp;}
+    if(nl==='closing lease liability'||nl==='total lease liability'){var _oll=null,_ia=null,_pm=null;for(k in rowMap){if(k.indexOf('opening lease liability')===0){_oll=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('interest accretion')===0){_ia=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('lease payments made')===0){_pm=CA+rowMap[k];break;}}if(_oll&&_ia&&_pm)return'='+_oll+'+'+_ia+'+'+_pm;}
+    if(nl==='total p&l charge (d&a + interest)'){var _dexp=null,_iexp=null;for(k in rowMap){if(k.indexOf('depreciation (operating expense)')===0){_dexp=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('interest expense (finance cost)')===0){_iexp=CA+rowMap[k];break;}}if(_dexp&&_iexp)return'='+_dexp+'+'+_iexp;}
+    if(nl==='total financing outflow'){var _fp=null,_fi=null;for(k in rowMap){if(k.indexOf('financing cf — principal')===0){_fp=CA+rowMap[k];break;}}for(k in rowMap){if(k.indexOf('financing cf — interest paid')===0){_fi=CA+rowMap[k];break;}}if(_fp&&_fi)return'='+_fp+'+'+_fi;}
+    if(nl==='depreciation (operating expense)'){var dsr=null;for(k in rowMap){if(k.indexOf('depreciation — straight-line')===0){dsr=CA+rowMap[k];break;}}if(dsr)return'='+dsr;}
+    if(nl==='interest expense (finance cost)'){var iar=null;for(k in rowMap){if(k.indexOf('interest accretion')===0){iar=CA+rowMap[k];break;}}if(iar)return'='+iar;}
+    if(nl==='financing cf — principal repayment'){var par=null,pmt=R('lease payments made');for(k in rowMap){if(k.indexOf('interest accretion')===0){par=CA+rowMap[k];break;}}if(par&&pmt)return'='+pmt+'-'+par;}
+    if(nl==='financing cf — interest paid'){var iar2=null;for(k in rowMap){if(k.indexOf('interest accretion')===0){iar2=CA+rowMap[k];break;}}if(iar2)return'='+iar2;}
+  }
+
+  /* ─── IFRS 18 (P&L) ─── */
+  if(mtu.indexOf('ifrs 18')>=0){
+    if(nl==='revenue'){var r118=A('rev1'),rg18=A('revGrowth');if(ci===0&&r118)return'='+r118;if(ci>0&&rg18){var prv18=Rp('revenue');if(prv18)return'='+prv18+'*(1+'+rg18+'/100)';}}
+    if(nl==='cost of sales'){var rv18=R('revenue'),cg=A('cogsRatio');if(rv18&&cg)return'=-'+rv18+'*'+cg+'/100';}
+    if(nl==='distribution costs'){var rv18b=R('revenue'),dr18=A('distRatio');if(rv18b&&dr18)return'=-'+rv18b+'*'+dr18+'/100';}
+    if(nl==='administrative expenses'){var rv18c=R('revenue'),ar18=A('adminRatio');if(rv18c&&ar18)return'=-'+rv18c+'*'+ar18+'/100';}
+    if(nl==='research & development expenses'){var rv18d=R('revenue'),rr18=A('rdRatio');if(rv18d&&rr18)return'=-'+rv18d+'*'+rr18+'/100';}
+    if(nl.indexOf('\u21b3 ebitda')===0){var op=R('operating profit (ebit)'),da6=null;for(k in rowMap){if(k.indexOf('\u21b3 depreciation')===0){da6=CA+rowMap[k];break;}}if(op&&da6)return'='+op+'-'+da6;}
+    if(nl==='profit before tax (pbt)'){var _op18=R('operating profit (ebit)'),_fi18=R('finance income'),_as18=R('share of profit — associates'),_fc18=R('finance costs');if(_op18){var _pts18=[_op18];if(_fi18)_pts18.push(_fi18);if(_as18)_pts18.push(_as18);if(_fc18)_pts18.push(_fc18);return'='+_pts18.join('+');}}
+    if(nl==='income tax expense'){var pb=R('profit before tax (pbt)'),tx4=A('taxRate');if(pb&&tx4)return'=IF('+pb+'>0,-'+pb+'*'+tx4+'/100,0)';}
+    if(nl==='total operating expenses (by nature)'){var _rv18t=R('revenue'),_op18t=R('operating profit (ebit)');if(_rv18t&&_op18t)return'='+_rv18t+'-'+_op18t;}
+  }
+
+  /* ─── IAS 19 (Pension) ─── */
+  if(mtu.indexOf('ias 19')>=0){
+    if(nl.indexOf('interest cost (discount rate')===0){var od=R('opening dbo'),dr19=A('discRate');if(od&&dr19)return'='+od+'*'+dr19+'/100';}
+    if(nl.indexOf('expected return on assets')===0){var op19=R('opening plan assets'),dr19b=A('discRate');if(op19&&dr19b)return'='+op19+'*'+dr19b+'/100';}
+    if(nl.indexOf('actuarial return above expected')===0){var op19b=R('opening plan assets'),ar19=A('assetRet'),dr19c=A('discRate');if(op19b&&ar19&&dr19c)return'='+op19b+'*('+ar19+'-'+dr19c+')/100';}
+    if(nl.indexOf('net interest on net liability')===0){var dr19d=A('discRate');if(ci===0&&A('openDBO')&&A('openAssets')&&dr19d)return'=('+A('openDBO')+'-'+A('openAssets')+')*'+dr19d+'/100';if(ci>0){var nlr=null;for(k in rowMap){if(k.indexOf('net liability / (asset)')===0){nlr=prevCA+rowMap[k];break;}}if(nlr&&dr19d)return'='+nlr+'*'+dr19d+'/100';}}
+    if(nl.indexOf('net liability / (asset)')===0){var cd=R('closing dbo'),cp19=R('closing fair value plan assets');if(cd&&cp19)return'='+cd+'-'+cp19;}
+    if(nl==='funding gap (deficit \u00d7 disc. rate)'){var nl19=null;for(k in rowMap){if(k.indexOf('net liability / (asset)')===0){nl19=CA+rowMap[k];break;}}var dr19e=A('discRate');if(nl19&&dr19e)return'='+nl19+'*'+dr19e+'/100';}
+  }
+
+  /* ─── IAS 12 (Deferred Tax — P&L) ─── */
+  if(mtu.indexOf('ias 12')>=0&&mtu.indexOf('balance sheet')<0){
+    if(nl.indexOf('current tax at')===0){var ap=R('accounting profit'),tr12=A('taxRate');if(ap&&tr12)return'='+ap+'*'+tr12+'/100';}
+    if(nl==='total income tax expense'){var ct=R('current tax expense'),dt=R('deferred tax (credit)');if(ct&&dt)return'='+ct+'+'+dt;}
+  }
+
+  /* ─── IAS 2 (Inventory) ─── */
+  if(mtu.indexOf('ias 2')>=0||mtu.indexOf('inventori')>=0){
+    if(nl==='closing inventory'){var oi=R('opening inventory'),pu=R('purchases / manufacturing costs'),cg2=R('cost of goods sold (cogs)'),nr=R('nrv write-down');if(oi&&pu&&cg2){var ps3=[oi,pu,cg2];if(nr)ps3.push(nr);return'='+ps3.join('+');}}
+    if(nl==='days on hand (doh)'){var cg3=null;for(k in rowMap){if(k.indexOf('cost of goods sold')===0){cg3=CA+rowMap[k];break;}}var cl=R('closing inventory');if(cg3&&cl)return'=IF('+cg3+'<>0,'+cl+'/(-'+cg3+')*365,0)';}
+    if(nl==='inventory turnover (\u00d7)'){var cg4=null;for(k in rowMap){if(k.indexOf('cost of goods sold')===0){cg4=CA+rowMap[k];break;}}var cl2=R('closing inventory'),oi2=R('opening inventory');if(cg4&&cl2&&oi2)return'=IF(('+cl2+'+'+oi2+')/2<>0,-'+cg4+'/(('+cl2+'+'+oi2+')/2),0)';}
+  }
+
+  /* ─── IAS 38 (Intangibles) ─── */
+  if(mtu.indexOf('ias 38')>=0){
+    if(nl==='amortisation charge — current year'||nl==='amortisation charge'){var bc2=A('intangCost'),la2=A('usefulLife');if(bc2&&la2)return'=-'+bc2+'/'+la2;}
+    if(nl==='finite-life intangibles nbv'){var gc=R('closing gross carrying amount'),acr=R('closing accumulated amortisation');if(gc&&acr)return'='+gc+'+'+acr;}
+    if(nl==='total intangibles (incl. goodwill)'){var nb=R('finite-life intangibles nbv'),gw=R('goodwill (indefinite');if(nb&&gw)return'='+nb+'+'+gw;}
+    if(nl==='capitalisation rate %'){var dc=A('devCapAnn'),re=A('researchExp');if(dc&&re)return'=IF('+dc+'+'+re+'>0,'+dc+'/('+dc+'+'+re+')*100,0)';}
+  }
+
+  /* ─── IAS 37 (Provisions) ─── */
+  if(mtu.indexOf('ias 37')>=0){
+    if(nl.indexOf('charge in year')===0){var rv37=A('rev1'),rg37=A('revGrowth'),wp37=A('warrantyPct');if(rv37&&wp37){if(ci===0)return'='+rv37+'*'+wp37+'/100';if(rg37)return'='+rv37+'*POWER(1+'+rg37+'/100,'+ci+')*'+wp37+'/100';}}
+    if(nl.indexOf('unwinding of discount')===0){var ob=R('opening balance'),dr37=A('discRate');if(ob&&dr37)return'='+ob+'*'+dr37+'/100';}
+    if(nl==='total closing provisions'){var _wcl=null,_ocl=null,_rcl=null,_ecl=null;for(k in rowMap){if(k==='closing balance — warranty'){_wcl=CA+rowMap[k];break;}}for(k in rowMap){if(k==='closing balance — onerous contracts'){_ocl=CA+rowMap[k];break;}}for(k in rowMap){if(k==='closing balance — restructuring'){_rcl=CA+rowMap[k];break;}}for(k in rowMap){if(k==='closing balance — environmental'){_ecl=CA+rowMap[k];break;}}var _pts37=[];if(_wcl)_pts37.push(_wcl);if(_ocl)_pts37.push(_ocl);if(_rcl)_pts37.push(_rcl);if(_ecl)_pts37.push(_ecl);if(_pts37.length)return'='+_pts37.join('+');}
+  }
+
+  /* ─── IFRS 17 (Insurance) ─── */
+  if(mtu.indexOf('ifrs 17')>=0){
+    if(nl==='premiums written'){var pm=A('premiums'),pg=A('premGrowth');if(ci===0&&pm)return'='+pm;if(ci>0&&pg){var ppr=Rp('premiums written');if(ppr)return'='+ppr+'*(1+'+pg+'/100)';}}
+    if(nl.indexOf('best estimate liability')===0){var pr17=R('premiums written'),cr17=A('claimsRatio'),disc17=A('discRate');if(pr17&&cr17&&disc17)return'='+pr17+'*'+cr17+'/100/(1+'+disc17+'/100)';}
+    if(nl.indexOf('risk adjustment for non-financial risk')===0){var be17=R('best estimate liability (bel'),ra17=A('riskAdj');if(be17&&ra17)return'='+be17+'*'+ra17+'/100';}
+    if(nl.indexOf('interest accretion on csm')===0){var csm17=R('opening csm'),dr17=A('discRate');if(csm17&&dr17)return'='+csm17+'*'+dr17+'/100';}
+    if(nl.indexOf('incurred claims & benefits')===0){var pr17b=R('premiums written'),cr17b=A('claimsRatio');if(pr17b&&cr17b)return'=-'+pr17b+'*'+cr17b+'/100';}
+    if(nl.indexOf('insurance finance income')===0){var be17b=R('best estimate liability (bel'),dr17b=A('discRate');if(be17b&&dr17b)return'='+be17b+'*'+dr17b+'/100';}
+  }
+
+  /* ─── DDM ─── */
+  if(mtu.indexOf('ddm')>=0||mtu.indexOf('dividend discount')>=0){
+    if(nl==='earnings per share (eps)'){var e1=A('eps1'),eg=A('epsGrowth');if(ci===0&&e1)return'='+e1;if(ci>0&&eg){var pe=Rp('earnings per share (eps)');if(pe)return'='+pe+'*(1+'+eg+'/100)';}}
+    if(nl==='dividends per share (dps)'){var er4=R('earnings per share (eps)'),py=A('payoutR');if(er4&&py)return'='+er4+'*'+py+'/100';}
+    if(nl.indexOf('discount factor (ke')===0){var ke=A('ke');if(ke)return'=1/(1+'+ke+'/100)^'+p;}
+    if(nl==='pv of dps'){var dp=R('dividends per share (dps)'),df5=null;for(k in rowMap){if(k.indexOf('discount factor (ke')===0){df5=CA+rowMap[k];break;}}if(dp&&df5)return'='+dp+'*'+df5;}
+    if(nl==='rf + \u03b2 \u00d7 erp = ke (capm)'){var rf2=A('rfRate'),be2=A('betaS'),ep2=A('erp');if(rf2&&be2&&ep2)return'='+rf2+'+'+be2+'*'+ep2;}
+  }
+
+  /* ─── LBO ─── */
+  if(mtu.indexOf('lbo')>=0){
+    if(nl==='entry ebitda'){var ev2=A('evEntry'),em3=A('entryMulti');if(ev2&&em3)return'='+ev2+'/'+em3;}
+    if(nl.indexOf('interest — senior debt')===0){var os=R('opening senior debt'),sr2=A('seniorRate');if(os&&sr2)return'=-'+os+'*'+sr2+'/100';}
+    if(nl==='exit enterprise value'){var xe=R('exit ebitda'),xm=A('exitMulti');if(xe&&xm)return'='+xe+'*'+xm;}
+    if(nl==='exit equity value'){var xev=R('exit enterprise value'),sd=R('less: senior debt at exit'),mz=R('less: mezzanine at exit');if(xev&&sd&&mz)return'='+xev+'+'+sd+'+'+mz;}
+  }
+
+  /* ─── NAV ─── */
+  if(mtu.indexOf('nav')>=0||mtu.indexOf('net asset value')>=0){
+    if(nl.indexOf('gross nav')===0){var ta=R('total assets (fair value)'),tl=R('total liabilities'),clr=R('contingent liabilities');if(ta&&tl&&clr)return'='+ta+'+'+tl+'+'+clr;}
+    if(nl.indexOf('nav attributable to equity holders')===0){var gn=R('gross nav'),nc=R('less: non-controlling interest');if(gn&&nc)return'='+gn+'+'+nc;}
+    if(nl==='nav per share (usd)'){var nq=R('nav attributable to equity holders'),sh2=A('shares');if(nq&&sh2)return'=IF('+sh2+'>0,'+nq+'/'+sh2+'*1000,0)';}
+    if(nl==='discounted nav (equity, $m)'){var nq2=R('nav attributable to equity holders'),nd=A('navDiscount');if(nq2&&nd)return'='+nq2+'*(1-'+nd+'/100)';}
+    if(nl==='discounted nav per share (usd)'){var dn=R('discounted nav (equity, $m)'),sh3=A('shares');if(dn&&sh3)return'=IF('+sh3+'>0,'+dn+'/'+sh3+'*1000,0)';}
+  }
+
+  /* ─── IFRS 9 Hedge ─── */
+  if(mtu.indexOf('hedge accounting')>=0){
+    if(nl==='rate differential (spot \u2212 strike) %'){var sp=A('spotRate'),st=A('strikeRate');if(sp&&st)return'=('+sp+'-'+st+')/100';}
+    if(nl==='effective portion of fv change'){var if9=R('instrument fair value (mark-to-market)'),ef=R('effectiveness %');if(if9&&ef)return'='+if9+'*'+ef+'/100';}
+    if(nl==='ineffective portion of fv change'){var if9b=R('instrument fair value (mark-to-market)'),ef2=R('effectiveness %');if(if9b&&ef2)return'='+if9b+'*(1-'+ef2+'/100)';}
+  }
+
+  /* ─── IFRS 3 (PPA) ─── */
+  if(mtu.indexOf('ifrs 3')>=0||mtu.indexOf('business combination')>=0){
+    if(nl.indexOf('ppa intangibles amortisation')===0){var ia=A('intangPPA'),il=A('intangLife');if(ia&&il)return'=-'+ia+'/'+il;}
+    if(nl.indexOf('pp&e uplift additional depreciation')===0){var pu=A('ppeUplifted'),pl=A('ppeLiveRem');if(pu&&pl)return'=-'+pu+'/'+pl;}
+    if(nl.indexOf('goodwill — closing')===0){var go=R('goodwill — opening'),gi=R('goodwill impairment');if(go&&gi)return'='+go+'+'+gi;}
+  }
+
+  /* ─── IFRS 10 (Consolidation) ─── */
+  if(mtu.indexOf('ifrs 10')>=0||mtu.indexOf('consolidation worksheet')>=0){
+    if(nl==='revenue'&&ci===3){var prA=A('parentRev'),srA=A('subRev'),icA=A('intercoSales');if(prA&&srA&&icA)return'='+prA+'+'+srA+'-'+icA;}
+    if(nl.indexOf('net income — group')===0&&ci===3){var pniA=A('parentNI'),sniA=A('subNI'),icpA=A('intercoProfit');if(pniA&&sniA&&icpA)return'='+pniA+'+'+sniA+'-'+icpA;}
+    if(nl.indexOf('nci on balance sheet')===0&&ci===3){var saA=A('subAssets'),npA=A('nciBalPct');if(saA&&npA)return'='+saA+'*'+npA+'/100';}
+    if(nl.indexOf('consolidated total assets')===0&&ci===3){var pAssets=A('parentAssets'),sAssets=A('subAssets'),loan=A('intercoLoan'),gw10=A('goodwillBS'),icp10=A('intercoProfit');if(pAssets&&sAssets&&loan&&gw10&&icp10)return'='+pAssets+'+'+sAssets+'-'+loan+'+'+gw10+'-'+icp10;}
+  }
+
+  /* ─── IFRS 9 C&M ─── */
+  if(mtu.indexOf('classification')>=0){return null;}
+
+  /* ─── IFRS 9 ECL ─── */
+  if(mtu.indexOf('expected credit loss')>=0||mtu.indexOf('ecl')>=0){
+    var stEAD=[A('s1EAD'),A('s2EAD'),A('s3EAD')];
+    var stPD=[A('s1PD12m'),A('s2PDLife'),A('s3PDLife')];
+    var stLGD=[A('s1LGD'),A('s2LGD'),A('s3LGD')];
+    var stEIR=[A('s1EIR'),A('s2EIR'),A('s3EIR')];
+    var isT=(ci===NC-1),cRw=rowMap[nl];
+    if(nl==='ead ($m) = gross carrying amount'){if(!isT&&stEAD[ci])return'='+stEAD[ci];if(isT&&cRw)return rowSum(cRw);}
+    if(nl==='interest income ($m)'){if(!isT&&stEAD[ci]&&stEIR[ci])return'='+stEAD[ci]+'*'+stEIR[ci]+'/100';if(isT&&cRw)return rowSum(cRw);}
+    if(nl.indexOf('base ecl = pd')===0){if(!isT&&stEAD[ci]&&stPD[ci]&&stLGD[ci])return'='+stEAD[ci]+'*'+stPD[ci]+'/100*'+stLGD[ci]+'/100';if(isT&&cRw)return rowSum(cRw);}
+    if((nl.indexOf('total ecl allowance')===0||nl.indexOf('closing ecl allowance')===0||nl.indexOf('probability-weighted ecl')===0)&&isT&&cRw)return rowSum(cRw);
+  }
+
+  return null;
+}
+
+async function exportExcelFormula(){
+  if(!M){showErr('No model loaded.');return;}
+  if(typeof ExcelJS==='undefined'){showErr('ExcelJS not loaded — retry in 2s.');return;}
+  try{
+    var WB=new ExcelJS.Workbook();
+    WB.creator='Financial Model App';WB.created=new Date();
+
+    /* ═══ Big-4 colour palette ═══ */
+    var P={
+      nb:'FF1F4E79',   /* Navy  — header/total bg */
+      mb:'FF2E75B6',   /* Medium Blue — section header bg */
+      sb:'FFD6E4F0',   /* Light Blue — subtotal bg */
+      lb:'FFDCE8F5',   /* Pale Blue — label column bg */
+      ab:'FFEAF2FB',   /* Alternate row bg */
+      wh:'FFFFFFFF',   /* White */
+      gy:'FFF2F2F2',   /* Light Gray alt row */
+      dk:'FF1A1A2E',   /* Dark text */
+      nv:'FF1F4E79',   /* Navy text (subtotal fg) */
+      /* Tab colours */
+      tModel:'FF1F4E79', tDash:'FF2E7D32', tAsm:'FFE65100', tAn:'FF6A1B9A', tNotes:'FF00838F'
+    };
+
+    /* ═══ Border / style helpers ═══ */
+    function bd(s,c){return{style:s||'thin',color:{argb:c||'FF000000'}};}
+    function bAll(c){var b=bd('thin',c);return{top:b,bottom:b,left:b,right:b};}
+    function bGray(){var b=bd('thin','FFD9D9D9');return{top:b,bottom:b,left:b,right:b};}
+    function bDouble(){return{top:bd('double'),bottom:bd('double'),left:bd('thin'),right:bd('thin')};}
+    function bTopBot(){return{top:bd('thin'),bottom:bd('thin'),left:bd('thin','FFD9D9D9'),right:bd('thin','FFD9D9D9')};}
+    /* Column-address helper: 1→A, 26→Z, 27→AA … */
+    function cA(n){var s='';while(n>0){s=String.fromCharCode(64+((n-1)%26+1))+s;n=Math.floor((n-1)/26);}return s;}
+    /* Apply header style (navy bg, white bold) */
+    function sH(c,ha,sz){
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.nb}};
+      c.font={bold:true,color:{argb:P.wh},size:sz||11,name:'Calibri'};
+      c.border=bAll();c.alignment={horizontal:ha||'center',vertical:'middle'};
+    }
+    /* Section header style (medium blue) */
+    function sSec(c){
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+      c.font={bold:true,color:{argb:P.wh},size:10,name:'Calibri'};
+      c.border={bottom:bd()};c.alignment={horizontal:'left',vertical:'middle'};
+    }
+    /* Subtotal row */
+    function sSub(c,isLbl,fmt){
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.sb}};
+      c.font={bold:true,color:{argb:P.nv},size:10,name:'Calibri'};
+      c.border=bTopBot();
+      c.alignment={horizontal:isLbl?'left':'right',vertical:'middle'};
+      if(!isLbl)c.numFmt=fmt==='percent'?'0.00%':'#,##0';
+    }
+    /* Total row */
+    function sTot(c,isLbl,fmt){
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.nb}};
+      c.font={bold:true,color:{argb:P.wh},size:11,name:'Calibri'};
+      c.border=bDouble();
+      c.alignment={horizontal:isLbl?'left':'right',vertical:'middle'};
+      if(!isLbl)c.numFmt=fmt==='percent'?'0.00%':'#,##0';
+    }
+    /* Data row */
+    function sDat(c,isLbl,ri,fmt){
+      var bg=ri%2===0?P.gy:P.wh;
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:isLbl?P.lb:bg}};
+      c.font={bold:isLbl,color:{argb:P.dk},size:10,name:'Calibri'};
+      c.border=bGray();
+      c.alignment={horizontal:isLbl?'left':'right',vertical:'middle'};
+      if(!isLbl)c.numFmt=fmt==='percent'?'0.00%':'#,##0';
+    }
+
+    /* ══════════════════════════════════════════════
+       PRE-COMPUTE ASSUMPTION ROW MAP
+       asmRefMap[key] = 'Assumptions!C{row}' for cross-sheet refs
+    ══════════════════════════════════════════════ */
+    var asmKeys=Object.keys(ASM);
+    var asmRefMap={};
+    var asmStartRow=3;/* row 1=title, row 2=headers, row 3+ = data */
+    asmKeys.forEach(function(k,i){asmRefMap[k]='Assumptions!C'+(asmStartRow+i);});
+
+    /* ══════════════════════════════════════════════
+       SHEET 1 — MODEL OUTPUT
+    ══════════════════════════════════════════════ */
+    var mWS=WB.addWorksheet('Model Output');
+    mWS.properties.tabColor={argb:P.tModel};
+    var hdrs=M.tableHeaders||[],NC=hdrs.length-1;
+    mWS.getColumn(1).width=38;
+    for(var _j=2;_j<=NC+1;_j++)mWS.getColumn(_j).width=16;
+
+    var mRow=1,rowMap={},SRM={},dCnt=0;
+
+    /* ── Title ── */
+    mWS.mergeCells(mRow,1,mRow,NC+1);
+    var mtC=mWS.getCell(mRow,1);mtC.value=M.modelType||'Financial Model';
+    sH(mtC,'center',14);mWS.getRow(mRow).height=30;mRow++;
+    /* ── Description ── */
+    mWS.mergeCells(mRow,1,mRow,NC+1);
+    var mdC=mWS.getCell(mRow,1);mdC.value=M.description||'';
+    mdC.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+    mdC.font={color:{argb:P.wh},size:10,name:'Calibri'};
+    mdC.alignment={horizontal:'center',vertical:'middle'};mWS.getRow(mRow).height=20;mRow++;
+    /* ── Blank ── */
+    mWS.getRow(mRow).height=4;mRow++;
+    /* ── Column headers ── */
+    mWS.getRow(mRow).height=25;
+    for(var _h=0;_h<hdrs.length;_h++){
+      var hc=mWS.getCell(mRow,_h+1);hc.value=hdrs[_h]||'';
+      sH(hc,_h===0?'left':'center');
+    }
+    var FRZ=mRow;mRow++;
+
+    /* ── Pre-scan: build allRowMap (complete map for forward-reference formulas) ── */
+    var allRowMap={};
+    (function(){var _sr=mRow;(M.tableRows||[]).forEach(function(row){var t=row.type||'data';if(t==='section_header'){_sr++;return;}var lbl=(row.label||'').toLowerCase().trim();if(allRowMap[lbl]===undefined)allRowMap[lbl]=_sr;_sr++;});}());
+
+    /* ── Data rows ── */
+    (M.tableRows||[]).forEach(function(row,ri){
+      var t=row.type||'data';
+      if(t==='section_header'){
+        mWS.mergeCells(mRow,1,mRow,NC+1);
+        var sc=mWS.getCell(mRow,1);
+        sc.value=(row.label||'').replace(/^──\s*/,'').replace(/\s*──+$/,'').trim();
+        sSec(sc);mWS.getRow(mRow).height=20;mRow++;return;
+      }
+      SRM[ri]=mRow;
+      var nl=(row.label||'').toLowerCase().trim();
+      rowMap[nl]=mRow;
+      var lr=mWS.getRow(mRow);lr.height=18;
+      var lc=mWS.getCell(mRow,1);lc.value=row.label||'';
+      if(t==='total')sTot(lc,true);
+      else if(t==='subtotal')sSub(lc,true);
+      else sDat(lc,true,dCnt);
+
+      (row.values||[]).forEach(function(v,ci){
+        var ok=ri+':'+ci;if(_cellOverrides[ok]!==undefined)v=_cellOverrides[ok];
+        var vc=mWS.getCell(mRow,ci+2),CA=cA(ci+2);
+        /* style */
+        if(t==='total')sTot(vc,false,row.format);
+        else if(t==='subtotal')sSub(vc,false,row.format);
+        else sDat(vc,false,dCnt,row.format);
+        if(v===null||v===undefined||v==='—'){vc.value=null;return;}
+        var nV=parseFloat(String(v).replace(/,/g,''));
+
+        /* ── Model-specific computed formula (checked first — can override SUM for specific total rows) ── */
+        {var _mf=_getComputedFormula(M.modelType,nl,ci,CA,cA(ci+1),allRowMap,asmRefMap,NC);if(_mf!==null){vc.value={formula:_mf,result:isNaN(nV)?0:nV};return;}}
+
+        /* ── SUM formula for total/subtotal ── */
+        if(t==='total'||t==='subtotal'){
+          var pts=[];
+          for(var ri2=ri-1;ri2>=0;ri2--){
+            var r2=M.tableRows[ri2]||{},rt2=r2.type||'data';
+            if(rt2==='section_header')break;
+            if((rt2==='total'||rt2==='subtotal')&&SRM[ri2]){pts.unshift(CA+SRM[ri2]);break;}
+            if(rt2==='data'&&SRM[ri2]){
+              var l2=(r2.label||'').trim();
+              if(l2.charAt(0)!=='\u21b3'&&(r2.format||'number')!=='percent')pts.unshift(CA+SRM[ri2]);
+            }
+          }
+          if(pts.length){
+            var sc2=0;
+            pts.forEach(function(ref){
+              var rn=parseInt(ref.replace(/[A-Z]+/g,''),10);
+              for(var k2 in SRM){if(SRM[k2]===rn){
+                  var r2d=M.tableRows[k2]||{};
+                  var ov2=_cellOverrides[k2+':'+ci];
+                  var rv2=ov2!==undefined?parseFloat(ov2):parseFloat(String((r2d.values||[])[ci]||0).replace(/,/g,''));
+                  if(!isNaN(rv2))sc2+=rv2;break;
+                }}
+            });
+            var tol=Math.max(0.01,Math.abs(nV)*0.002);
+            if(Math.abs(sc2-nV)<=tol)vc.value={formula:'SUM('+pts.join(',')+')',result:isNaN(nV)?0:nV};
+            else vc.value=isNaN(nV)?null:nV;
+          }else{vc.value=isNaN(nV)?null:nV;}
+          return;
+        }
+
+        /* ── Percent / ratio formula ── */
+        if(row.format==='percent'){
+          var pRes=_inferPctFormula(row.label,rowMap);
+          if(pRes){
+            var fStr;
+            if(typeof pRes.fml==='string'&&pRes.fml.indexOf('__GROWTH__:')===0){
+              var bR=parseInt(pRes.fml.split(':')[1],10);
+              if(ci>0&&bR){
+                var pCA=cA(ci+1);
+                fStr='IF('+pCA+bR+'<>0,('+CA+bR+'-'+pCA+bR+')/ABS('+pCA+bR+'),0)';
+                vc.value={formula:fStr,result:isNaN(nV)?0:nV/100};vc.numFmt='0.00%';return;
+              }
+            }else if(pRes.fml){
+              fStr=pRes.fml.replace(/(\d+)/g,function(n2){return CA+n2;});
+              if(pRes.neg)fStr='-'+fStr;
+              vc.value={formula:fStr,result:isNaN(nV)?0:nV/100};vc.numFmt='0.00%';return;
+            }
+          }
+          vc.value=isNaN(nV)?null:nV/100;vc.numFmt='0.00%';return;
+        }
+
+        /* ── Opening-balance = prior-period Closing ── */
+        if(ci>0&&/^opening\s/.test(nl)){
+          var ck=nl.replace(/^opening\s/,'closing ');
+          var cr=rowMap[ck];
+          if(cr){vc.value={formula:cA(ci+1)+cr,result:isNaN(nV)?0:nV};return;}
+        }
+
+        /* ── Default: numeric ── */
+        vc.value=isNaN(nV)?null:nV;
+      });
+      dCnt++;mRow++;
+    });
+    /* Freeze row 1 col A */
+    mWS.views=[{state:'frozen',xSplit:1,ySplit:FRZ,topLeftCell:'B'+(FRZ+1)}];
+
+    /* ══════════════════════════════════════════════
+       SHEET 2 — DASHBOARD
+    ══════════════════════════════════════════════ */
+    var dWS=WB.addWorksheet('Dashboard');
+    dWS.properties.tabColor={argb:P.tDash};
+    var series=_extractSeries(M),kpis=_buildKPIs(M,series);
+    var allCharts=_getDashAllCharts(M,series),yr=series.years||[];
+    var dCols=Math.max(3,yr.length+2);
+    dWS.getColumn(1).width=38;dWS.getColumn(2).width=22;
+    for(var _dc=3;_dc<=dCols+1;_dc++)dWS.getColumn(_dc).width=16;
+    var dR=1;
+
+    /* Title */
+    dWS.mergeCells(dR,1,dR,dCols);
+    var dtC=dWS.getCell(dR,1);dtC.value=(M.modelType||'Model')+' — Executive Dashboard';
+    sH(dtC,'center',14);dWS.getRow(dR).height=30;dR++;
+    /* Description */
+    dWS.mergeCells(dR,1,dR,dCols);
+    var ddC=dWS.getCell(dR,1);ddC.value=M.description||'';
+    ddC.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+    ddC.font={color:{argb:P.wh},size:10,name:'Calibri'};
+    ddC.alignment={horizontal:'center',vertical:'middle'};dWS.getRow(dR).height=20;dR++;dR++;
+
+    /* KPI cards */
+    if(kpis.length){
+      dWS.mergeCells(dR,1,dR,dCols);
+      var kpiH=dWS.getCell(dR,1);kpiH.value='KEY PERFORMANCE INDICATORS';
+      sH(kpiH,'left');dWS.getRow(dR).height=22;dR++;
+      dWS.getRow(dR).height=22;
+      ['Metric','Latest Value'].forEach(function(h,i){
+        var c=dWS.getCell(dR,i+1);c.value=h;
+        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+        c.font={bold:true,color:{argb:P.wh},size:10,name:'Calibri'};
+        c.border=bAll();c.alignment={horizontal:i===0?'left':'center',vertical:'middle'};
+      });dR++;
+      kpis.forEach(function(k,i){
+        dWS.getRow(dR).height=18;var bg=i%2===0?P.ab:P.wh;
+        [k.label,k.value].forEach(function(v,ci){
+          var c=dWS.getCell(dR,ci+1);c.value=String(v||'');
+          c.fill={type:'pattern',pattern:'solid',fgColor:{argb:ci===0?P.lb:bg}};
+          c.font={color:{argb:P.dk},size:10,name:'Calibri'};
+          c.border=bGray();c.alignment={horizontal:ci===0?'left':'right',vertical:'middle'};
+        });dR++;
+      });dR++;
+    }
+
+    /* Trend data table — limit to 12 metrics to fit a typical dashboard width */
+    var tCharts=allCharts.slice(0,12);
+    if(tCharts.length&&yr.length){
+      dWS.mergeCells(dR,1,dR,dCols);
+      var tH=dWS.getCell(dR,1);tH.value='KEY METRICS TREND  (values in reporting currency — use this table to insert Excel charts)';
+      sH(tH,'left');dWS.getRow(dR).height=22;dR++;
+      /* Chart-ready header */
+      dWS.getRow(dR).height=22;
+      ['Metric'].concat(yr).forEach(function(h,i){
+        var c=dWS.getCell(dR,i+1);c.value=h||'';
+        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+        c.font={bold:true,color:{argb:P.wh},size:10,name:'Calibri'};
+        c.border=bAll();c.alignment={horizontal:i===0?'left':'center',vertical:'middle'};
+      });dR++;
+      tCharts.forEach(function(ch,i){
+        dWS.getRow(dR).height=18;var bg=i%2===0?P.ab:P.wh;
+        var chLo=(ch.title||'').toLowerCase().trim();
+        /* Look up the Model Output row number for this metric to build dynamic cross-sheet refs */
+        var moRow=allRowMap[chLo];
+        if(moRow===undefined){for(var _k in allRowMap){if(_k.length>=4&&chLo.length>=4&&_k.indexOf(chLo)===0){moRow=allRowMap[_k];break;}}}
+        [ch.title].concat(ch.data.slice(0,yr.length).map(function(v){return(v===null||v===undefined)?null:v;})).forEach(function(v,ci){
+          var c=dWS.getCell(dR,ci+1);
+          var num=(ci>0&&v!==null&&!isNaN(Number(v)))?Number(v):null;
+          if(ci===0){c.value=String(ch.title||'');}
+          else if(moRow!==undefined){var moCol=cA(ci+1);c.value={formula:"='Model Output'!"+moCol+moRow,result:isNaN(Number(v))?0:Number(v)||0};}
+          else{c.value=num!==null?num:null;}
+          c.fill={type:'pattern',pattern:'solid',fgColor:{argb:ci===0?P.lb:bg}};
+          c.font={color:{argb:P.dk},size:10,name:'Calibri'};
+          c.border=bGray();c.alignment={horizontal:ci===0?'left':'right',vertical:'middle'};
+          if(ci>0&&(num!==null||moRow!==undefined))c.numFmt='#,##0';
+        });dR++;
+      });
+    }
+
+    /* ══════════════════════════════════════════════
+       SHEET 3 — ASSUMPTIONS
+    ══════════════════════════════════════════════ */
+    var aWS=WB.addWorksheet('Assumptions');
+    aWS.properties.tabColor={argb:P.tAsm};
+    aWS.getColumn(1).width=44;aWS.getColumn(2).width=26;
+    aWS.getColumn(3).width=18;aWS.getColumn(4).width=12;
+    var aR2=1;
+    /* Title */
+    aWS.mergeCells(aR2,1,aR2,4);
+    var atC=aWS.getCell(aR2,1);atC.value=M.modelType+' — Model Assumptions';
+    sH(atC,'center',13);aWS.getRow(aR2).height=28;aR2++;
+    /* Column headers */
+    aWS.getRow(aR2).height=22;
+    ['Parameter','Key','Value','Unit'].forEach(function(h,i){
+      var c=aWS.getCell(aR2,i+1);c.value=h;
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+      c.font={bold:true,color:{argb:P.wh},size:10,name:'Calibri'};
+      c.border=bAll();c.alignment={horizontal:i===0?'left':'center',vertical:'middle'};
+    });aR2++;
+    /* Assumption data */
+    asmKeys.forEach(function(k,i){
+      var asm=ASM[k];aWS.getRow(aR2).height=16;
+      var bg=i%2===0?P.ab:P.wh;
+      [asm.label||k,k,parseFloat(asm.value)||0,asm.unit||''].forEach(function(v,col){
+        var c=aWS.getCell(aR2,col+1);c.value=v;
+        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:col===0?P.lb:bg}};
+        c.font={color:{argb:P.dk},size:10,name:'Calibri'};
+        c.border=bGray();c.alignment={horizontal:col===2?'right':col===0?'left':'center',vertical:'middle'};
+        if(col===2)c.numFmt='#,##0.##';
+      });aR2++;
+    });
+    /* Custom assumptions */
+    if(Object.keys(_USER_ASM).length){
+      aWS.getRow(aR2).height=6;aR2++;
+      aWS.mergeCells(aR2,1,aR2,4);
+      var cuH=aWS.getCell(aR2,1);cuH.value='Custom / Overridden Assumptions';
+      cuH.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+      cuH.font={bold:true,color:{argb:P.wh},size:10,name:'Calibri'};
+      aWS.getRow(aR2).height=20;aR2++;
+      Object.keys(_USER_ASM).forEach(function(k,i){
+        var asm=_USER_ASM[k];aWS.getRow(aR2).height=16;
+        var bg=i%2===0?P.ab:P.wh;
+        [asm.label||k,k,parseFloat(asm.value)||0,asm.unit||''].forEach(function(v,col){
+          var c=aWS.getCell(aR2,col+1);c.value=v;
+          c.fill={type:'pattern',pattern:'solid',fgColor:{argb:col===0?P.lb:bg}};
+          c.font={color:{argb:P.dk},size:10,name:'Calibri'};
+          c.border=bGray();c.alignment={horizontal:col===2?'right':col===0?'left':'center',vertical:'middle'};
+          if(col===2)c.numFmt='#,##0.##';
+        });aR2++;
+      });
+    }
+
+    /* ══════════════════════════════════════════════
+       SHEET 4 — ANALYSIS
+    ══════════════════════════════════════════════ */
+    var anWS=WB.addWorksheet('Analysis');
+    anWS.properties.tabColor={argb:P.tAn};
+    anWS.getColumn(1).width=30;anWS.getColumn(2).width=110;
+    var an=M.analysis||{},anR3=1;
+    anWS.mergeCells(anR3,1,anR3,2);
+    var anT=anWS.getCell(anR3,1);anT.value=M.modelType+' — Analysis';
+    sH(anT,'center',13);anWS.getRow(anR3).height=28;anR3++;
+    anWS.mergeCells(anR3,1,anR3,2);
+    var anD=anWS.getCell(anR3,1);anD.value=M.description||'';
+    anD.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+    anD.font={color:{argb:P.wh},size:10,name:'Calibri'};
+    anD.alignment={horizontal:'center',vertical:'middle'};anWS.getRow(anR3).height=20;anR3++;anR3++;
+    function addAnSection(ttl,items,pfx){
+      if(!items||!items.length)return;
+      anWS.mergeCells(anR3,1,anR3,2);
+      var sh2=anWS.getCell(anR3,1);sh2.value=ttl;
+      sh2.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+      sh2.font={bold:true,color:{argb:P.wh},size:11,name:'Calibri'};
+      anWS.getRow(anR3).height=22;anR3++;
+      items.forEach(function(item,i){
+        anWS.getRow(anR3).height=16;var bg=i%2===0?P.ab:P.wh;
+        anWS.mergeCells(anR3,1,anR3,2);
+        var c=anWS.getCell(anR3,1);c.value=pfx+String(item||'');
+        c.fill={type:'pattern',pattern:'solid',fgColor:{argb:bg}};
+        c.font={color:{argb:P.dk},size:10,name:'Calibri'};
+        c.border=bGray();c.alignment={horizontal:'left',vertical:'middle',wrapText:true};anR3++;
+      });anR3++;
+    }
+    if(an.summary){
+      anWS.mergeCells(anR3,1,anR3,2);
+      var anSH=anWS.getCell(anR3,1);anSH.value='EXECUTIVE SUMMARY';
+      anSH.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+      anSH.font={bold:true,color:{argb:P.wh},size:11,name:'Calibri'};
+      anWS.getRow(anR3).height=22;anR3++;
+      anWS.mergeCells(anR3,1,anR3,2);
+      var anST=anWS.getCell(anR3,1);anST.value=an.summary;
+      anST.font={color:{argb:P.dk},size:10,name:'Calibri'};
+      anST.alignment={wrapText:true,vertical:'top'};anWS.getRow(anR3).height=60;anR3++;anR3++;
+    }
+    addAnSection('KEY FINDINGS',an.keyFindings,'• ');
+    addAnSection('KEY RISKS',an.risks,'⚠ ');
+    addAnSection('RECOMMENDATIONS',an.recommendations,'✓ ');
+
+    /* ══════════════════════════════════════════════
+       SHEET 5 — IFRS NOTES
+    ══════════════════════════════════════════════ */
+    var notes=M.ifrsNotes||[];
+    if(notes.length){
+      var nWS=WB.addWorksheet('IFRS Notes');
+      nWS.properties.tabColor={argb:P.tNotes};
+      nWS.getColumn(1).width=30;nWS.getColumn(2).width=110;
+      var nR3=1;
+      nWS.mergeCells(nR3,1,nR3,2);
+      var nTt=nWS.getCell(nR3,1);nTt.value=(M.ifrsStandard||M.modelType)+' — Disclosure Notes';
+      sH(nTt,'center',13);nWS.getRow(nR3).height=28;nR3++;
+      notes.forEach(function(note,i){
+        nR3++;
+        nWS.mergeCells(nR3,1,nR3,2);
+        var nH=nWS.getCell(nR3,1);nH.value='Note '+(i+1)+': '+(note.title||'');
+        nH.fill={type:'pattern',pattern:'solid',fgColor:{argb:P.mb}};
+        nH.font={bold:true,color:{argb:P.wh},size:11,name:'Calibri'};nWS.getRow(nR3).height=22;nR3++;
+        if(note.content){
+          nWS.mergeCells(nR3,1,nR3,2);
+          var nC=nWS.getCell(nR3,1);nC.value=note.content;
+          nC.font={color:{argb:P.dk},size:10,name:'Calibri'};
+          nC.alignment={wrapText:true,vertical:'top'};nWS.getRow(nR3).height=80;nR3++;
+        }
+      });
+    }
+
+    /* ══════════════════════════════════════════════
+       DOWNLOAD
+    ══════════════════════════════════════════════ */
+    var buf=await WB.xlsx.writeBuffer();
+    var blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=_fn()+'.xlsx';
+    document.body.appendChild(a);a.click();
+    setTimeout(function(){try{document.body.removeChild(a);}catch(e){}URL.revokeObjectURL(url);},500);
+    showToast('Excel exported ✓ — '+_fn()+'.xlsx');
+  }catch(ex){console.error('Excel export error:',ex);showErr('Export failed: '+(ex.message||String(ex)));}
 }
 
 /* ═══ SHARE ═══ */
@@ -6569,11 +7607,16 @@ function _buildSearchUI(type) {
     // Search bar
     + '<div style="margin-top:14px;display:flex;gap:8px;align-items:center">'
     + '<div style="flex:1;position:relative">'
+    + '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;color:#636366">🔍</span>'
     + '<input id="kb-input-'+type+'" type="text" placeholder="'+placeholder+'"'
-    + ' style="width:100%;box-sizing:border-box;background:#1c1c1e;border:1.5px solid #3a3a3c;border-radius:10px;color:#f5f5f7;font-size:13px;padding:10px 40px 10px 14px;outline:none;transition:border-color .2s"'
+    + ' style="width:100%;box-sizing:border-box;background:#1c1c1e;border:1.5px solid #3a3a3c;border-radius:10px;color:#f5f5f7;font-size:13px;padding:10px 64px 10px 36px;outline:none;transition:border-color .2s"'
     + ' onfocus="this.style.borderColor=\''+accent+'\'" onblur="this.style.borderColor=\'#3a3a3c\'"'
-    + ' oninput="kbSearch(\''+type+'\')" onkeydown="if(event.key===\'Enter\')kbAI(\''+type+'\')">'
-    + '<span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none">🔍</span>'
+    + ' oninput="kbSearch(\''+type+'\')" onkeydown="if(event.key===\'Escape\'){kbClearSearch(\''+type+'\');}else if(event.key===\'Enter\')kbAI(\''+type+'\')"'
+    + ' aria-label="'+(type==='ifrs'?'Search IFRS and IAS topics':'Search ISA topics')+'">'
+    + '<button id="kb-clear-'+type+'" onclick="kbClearSearch(\''+type+'\')"'
+    + ' aria-label="Clear search" title="Clear search"'
+    + ' style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8e8e93;cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;font-family:inherit"'
+    + ' onmouseover="this.style.color=\'#f5f5f7\'" onmouseout="this.style.color=\'#8e8e93\'">&#215;</button>'
     + '</div>'
     + '<button onclick="kbAI(\''+type+'\')" style="background:linear-gradient(135deg,'+accent+','+accent+'cc);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">⚡ Search</button>'
     + '</div>'
@@ -6647,9 +7690,21 @@ function _buildDefaultCards(type) {
 
 var _kbDebounce = {};  /* per-type debounce timers */
 
+function kbClearSearch(type) {
+  var inp = document.getElementById('kb-input-' + type);
+  if (inp) { inp.value = ''; inp.focus(); }
+  var clr = document.getElementById('kb-clear-' + type);
+  if (clr) clr.style.display = 'none';
+  kbSearch(type);
+}
+
 function kbSearch(type) {
   var inp = document.getElementById('kb-input-' + type);
   var raw = inp ? inp.value.trim() : '';
+
+  /* Toggle clear button visibility */
+  var clr = document.getElementById('kb-clear-' + type);
+  if (clr) clr.style.display = raw ? 'block' : 'none';
 
   if (!raw) {
     /* Empty — show default browse cards with example chips */
@@ -6706,7 +7761,7 @@ function _kbShowPreview(type, query) {
 
   if (scored.length > 0) {
     html += '<div style="font-size:10px;color:#48484a;padding:2px 0 8px">Related standards (full answer loading above):</div>';
-    scored.slice(0, 5).forEach(function (x) { html += _buildResultCard(x.e, query, type); });
+    scored.slice(0, 5).forEach(function (x) { html += _buildResultCard(x.e, query, type, x.score); });
   }
   container.innerHTML = html;
 
@@ -6967,7 +8022,7 @@ function kbAI(type) {
       var hasInterviewQs = container.querySelector('[id^="kbiq_"]');
       if (!hasInterviewQs && scored.slice(0, 4).length > 0) {
         container.innerHTML = '<div style="font-size:10px;color:#48484a;padding:2px 0 10px">Related standards:</div>'
-          + scored.slice(0, 4).map(function (x) { return _buildResultCard(x.entry, query, type); }).join('');
+          + scored.slice(0, 4).map(function (x) { return _buildResultCard(x.entry, query, type, x.score); }).join('');
       } else if (hasInterviewQs) {
         /* Add a subtle 'answered' indicator on the clicked question */
         container.querySelectorAll('[id^="kbiq_"]').forEach(function(b){
@@ -7485,6 +8540,7 @@ function parseWorkbook(wb, fname){
 
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 
 <!-- Global IFRS / ISA reference overlay -->
 <div id="globalKBOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.92);backdrop-filter:blur(8px);flex-direction:column;">
@@ -7737,6 +8793,87 @@ function _anthropicFetch(body, onSuccess, onError) {
    ISA  KNOWLEDGE ENGINE — All 3 volumes: Auditing / Review / Other Assurance
 ═══════════════════════════════════════════════════════════════════════ */
 
+/* ── PARAGRAPH REFERENCES & CROSS-REFERENCES LOOKUP ─────────────────*/
+var IFRS_PARA_REFS = {
+  'IFRS 1': {paragraphs:'IFRS 1.1-10 (scope), 1.6 (opening balance sheet), 1.24-28 (reconciliations), 1.D1-D34 (optional exemptions), 1.B1-B8 (IFRS 9 exemption)',crossReferences:['IAS 8 — Accounting Policies (retrospective application)','IFRS 9 — Financial Instruments (prospective exemption)','IAS 16 — PP&E (fair value as deemed cost exemption)','IAS 21 — Foreign Currency (translation reserve reset)']},
+  'IFRS 2': {paragraphs:'IFRS 2.7 (grant date FV), 2.19 (tranche approach), 2.20-21 (non-market conditions), 2.30 (cash-settled remeasurement), 2.44-52 (modification)',crossReferences:['IAS 32 — Financial Instruments Presentation (classification)','IFRS 9 — Financial Instruments (cash-settled at FV)','IAS 12 — Income Taxes (tax deduction timing difference)']},
+  'IFRS 3': {paragraphs:'IFRS 3.4 (acquisition method), 3.18 (acquisition date), 3.32 (goodwill calculation), 3.34 (bargain purchase), 3.39 (contingent consideration), 3.45 (measurement period), 3.58 (subsequent measurement)',crossReferences:['IFRS 10 — Consolidated Financial Statements (control definition)','IAS 36 — Impairment (goodwill impairment test)','IFRS 13 — Fair Value Measurement (PPA valuations)','IAS 38 — Intangible Assets (identifiable intangibles in PPA)']},
+  'IFRS 5': {paragraphs:'IFRS 5.6-8 (classification criteria), 5.9 (one-year extension), 5.15-17 (measurement), 5.31-43 (presentation/disclosure), 5.20 (measurement at reclassification out)',crossReferences:['IAS 36 — Impairment (FV-CTS measurement)','IFRS 13 — Fair Value Measurement (FV determination)','IAS 16 — PP&E (reinstatement basis)']},
+  'IFRS 7': {paragraphs:'IFRS 7.25 (FV hierarchy), 7.31-42 (nature and extent of risks), 7.35A-35N (credit risk disclosures post-IFRS 9), 7.39-40 (liquidity risk maturity analysis), 7.40-42 (market risk sensitivity)',crossReferences:['IFRS 9 — Financial Instruments (ECL staging for disclosure)','IFRS 13 — Fair Value Measurement (hierarchy disclosures)','IAS 32 — Financial Instruments Presentation (classification)']},
+  'IFRS 8': {paragraphs:'IFRS 8.5 (CODM definition), 8.11-19 (reportable segments), 8.12-13 (aggregation criteria), 8.16 (quantitative thresholds 10%), 8.26-28 (entity-wide disclosures)',crossReferences:['IAS 36 — Impairment (goodwill allocated to segments/CGUs)','IFRS 13 — Fair Value Measurement (segment FV disclosures)']},
+  'IFRS 9': {paragraphs:'IFRS 9.4.1.1-4.1.5 (classification: SPPI + business model), 9.5.5.1-5.5.20 (ECL impairment stages), 9.5.5.15 (lifetime ECL Stage 2), 9.5.5.17 (30-DPD backstop), 9.6.4-6.5 (hedge accounting)',crossReferences:['IFRS 7 — Financial Instruments Disclosures (ECL tables)','IAS 32 — Financial Instruments Presentation (classification)','IFRS 13 — Fair Value Measurement (FVTPL/FVOCI valuation)','IAS 39 — (predecessor, transitional provisions)']},
+  'IFRS 10': {paragraphs:'IFRS 10.5-9 (control model), 10.10-14 (power), 10.15-16 (variable returns), 10.17-18 (link), 10.19-24 (de facto control), 10.27-33 (investment entities exemption)',crossReferences:['IFRS 3 — Business Combinations (acquisition accounting on consolidation)','IFRS 11 — Joint Arrangements (joint ventures vs subsidiaries)','IAS 28 — Investments in Associates (equity method)','IAS 27 — Separate Financial Statements']},
+  'IFRS 13': {paragraphs:'IFRS 13.9 (FV definition: exit price), 13.24-33 (principal market), 13.61-67 (FV hierarchy), 13.72-90 (Level 3 inputs), 13.91-99 (disclosures), 13.67 (hierarchy transfer)',crossReferences:['IFRS 9 — Financial Instruments (FVTPL/FVOCI measurement)','IAS 36 — Impairment (FV less costs of disposal)','IAS 40 — Investment Property (fair value model)','IFRS 3 — Business Combinations (PPA at FV)']},
+  'IFRS 15': {paragraphs:'IFRS 15.9-16 (Step 1: contract), 15.22-30 (Step 2: POs), 15.47-72 (Step 3: transaction price), 15.73-86 (Step 4: allocation), 15.31-46 (Step 5: when PO satisfied), 15.B2-B13 (series guidance)',crossReferences:['IFRS 16 — Leases (sale and leaseback — transfer determination)','IAS 37 — Provisions (onerous contracts)','IFRS 9 — Financial Instruments (contract asset impairment)','IAS 18 — Revenue (superseded by IFRS 15)']},
+  'IFRS 16': {paragraphs:'IFRS 16.22-30 (initial measurement), 16.40-46 (reassessment), 16.44-47 (modification), 16.63-65 (lessor: finance vs operating), 16.98-103 (sale and leaseback), 16.B14-B20 (lease definition)',crossReferences:['IFRS 15 — Revenue (sale and leaseback: transfer is a sale)','IAS 36 — Impairment (ROU asset impairment)','IAS 23 — Borrowing Costs (IBR and capitalisation)','IFRS 9 — Financial Instruments (finance lease receivable for lessors)']},
+  'IFRS 17': {paragraphs:'IFRS 17.32-36 (BBA general model), 17.38-39 (CSM), 17.53-60 (PAA), 17.45-46 (risk adjustment), 17.38 (loss component for onerous groups), 17.63-70 (VFA)',crossReferences:['IFRS 9 — Financial Instruments (financial assets backing insurance)','IFRS 15 — Revenue (investment component separation)','IAS 12 — Income Taxes (deferred tax on CSM)']},
+  'IFRS 18': {paragraphs:'IFRS 18.20-48 (income statement categories), 18.52-79 (management-defined performance measures), 18.80-104 (aggregation/disaggregation), 18.A1-A11 (operating/investing/financing)',crossReferences:['IAS 1 — Presentation of Financial Statements (superseded requirements)','IAS 7 — Statement of Cash Flows (operating/investing/financing)','IFRS 8 — Operating Segments (MPMs and segment disclosure)']},
+  'IAS 1': {paragraphs:'IAS 1.69-76 (current/non-current), 1.7 (materiality definition), 1.60-65 (presentation), 1.10 (complete set of FS), 1.82-105 (P&L line items), 1.106-110 (OCI)',crossReferences:['IAS 7 — Statement of Cash Flows (cash flow statement)','IAS 8 — Accounting Policies (changes and errors)','IFRS 18 — Presentation (supersedes IAS 1 presentation requirements from 2027)']},
+  'IAS 2': {paragraphs:'IAS 2.6 (definition — lower of cost and NRV), 2.9-24 (cost measurement: FIFO, weighted avg), 2.25-29 (NRV), 2.31 (cost of inventories expensed), 2.36 (disclosures)',crossReferences:['IAS 36 — Impairment (write-down reversal)','IFRS 15 — Revenue (cost of obtaining a contract)','IAS 16 — PP&E (cost of manufactured inventory)']},
+  'IAS 7': {paragraphs:'IAS 7.6 (operating/investing/financing classification), 7.18-20 (direct method operating), 7.20 (indirect method reconciliation), 7.31-34 (interest and dividends), 7.35-36 (taxes)',crossReferences:['IAS 32 — Financial Instruments (financial asset/liability for financing)','IFRS 16 — Leases (lease liability payments — financing)','IAS 12 — Income Taxes (tax paid — operating)']},
+  'IAS 12': {paragraphs:'IAS 12.5 (tax base definition), 12.15 (initial recognition exception), 12.24 (DTA recognition criteria), 12.47-52 (deferred tax measurement), 12.57-68 (undistributed profits)',crossReferences:['IFRS 3 — Business Combinations (deferred tax in PPA)','IAS 37 — Provisions (tax on provisions)','IFRS 16 — Leases (ROU/lease liability deferred tax)','IFRIC 23 — Uncertain Tax Treatments']},
+  'IAS 16': {paragraphs:'IAS 16.7 (recognition criteria), 16.16 (initial cost: borrowing, decommissioning), 16.30-42 (cost model vs revaluation model), 16.43-62 (depreciation), 16.70-72 (derecognition)',crossReferences:['IAS 23 — Borrowing Costs (qualifying asset)','IAS 36 — Impairment (impairment of PP&E)','IAS 37 — Provisions (decommissioning provision)','IFRS 16 — Leases (right-of-use asset)']},
+  'IAS 19': {paragraphs:'IAS 19.55-98 (DBO measurement), 19.113-116 (plan assets), 19.120-125 (remeasurements in OCI), 19.99-112 (service cost and net interest), 19.133-147 (other long-term employee benefits)',crossReferences:['IAS 26 — Accounting and Reporting by Retirement Benefit Plans','IAS 37 — Provisions (employee termination benefits)','IFRS 2 — Share-based Payment (equity compensation)','IAS 1 — Presentation (OCI presentation of remeasurements)']},
+  'IAS 21': {paragraphs:'IAS 21.8-14 (functional currency determination), 21.20-27 (translation of transactions), 21.28-34 (monetary items), 21.38-43 (translation of foreign operations), 21.47-52 (disposal)',crossReferences:['IFRS 9 — Financial Instruments (FX derivatives)','IAS 39 / IFRS 9 — (FX hedge accounting)','IFRIC 16 — Hedges of Net Investment in a Foreign Operation','IAS 12 — Income Taxes (deferred tax on translation differences)']},
+  'IAS 32': {paragraphs:'IAS 32.11 (financial instrument definition), 32.16-27 (liability vs equity), 32.28-32 (compound instruments), 32.33-34 (treasury shares), 32.AG3-AG14 (contingent settlement)',crossReferences:['IFRS 9 — Financial Instruments (measurement and recognition)','IAS 39 — (predecessor)','IFRS 7 — Financial Instruments Disclosures','IAS 33 — EPS (impact of compound instruments)']},
+  'IAS 36': {paragraphs:'IAS 36.5-17 (indicators of impairment), 36.18-57 (measuring recoverable amount), 36.66-103 (CGU identification and testing), 36.80-99 (goodwill impairment), 36.109-116 (reversal)',crossReferences:['IAS 16 — PP&E (carrying amount before impairment)','IFRS 3 — Business Combinations (goodwill impairment test)','IFRS 13 — Fair Value Measurement (FV less costs of disposal)','IAS 38 — Intangible Assets (indefinite life: annual impairment test)']},
+  'IAS 37': {paragraphs:'IAS 37.14 (recognition criteria: 3 conditions), 37.36-52 (measurement: best estimate), 37.66-83 (specific applications: onerous, restructuring), 37.27-30 (contingent liabilities), 37.31-35 (contingent assets)',crossReferences:['IAS 16 — PP&E (decommissioning provisions)','IFRS 15 — Revenue (onerous performance obligations)','IFRS 3 — Business Combinations (contingent consideration)','IAS 12 — Income Taxes (tax on provisions)']},
+  'IAS 38': {paragraphs:'IAS 38.21-23 (recognition criteria), 38.52-67 (internally generated intangibles), 38.54-57 (6 development-phase criteria), 38.88-96 (useful life: finite vs indefinite), 38.97-110 (amortisation)',crossReferences:['IAS 36 — Impairment (indefinite-life impairment test)','IFRS 3 — Business Combinations (identifiable intangibles in PPA)','IAS 16 — PP&E (revaluation model option)','IAS 23 — Borrowing Costs (qualifying intangible assets)']},
+  'IFRIC 12': {paragraphs:'IFRIC 12.5-12 (scope and classification), 12.13-17 (financial asset vs intangible asset model), 12.19-22 (borrowing costs in concession)',crossReferences:['IAS 16 — PP&E (infrastructure assets)','IAS 38 — Intangible Assets (intangible asset model)','IFRS 9 — Financial Instruments (financial asset model)','IAS 23 — Borrowing Costs']},
+  'IFRIC 16': {paragraphs:'IFRIC 16.4-7 (what can be hedged), 16.11-14 (hedging instrument placement), 16.15-18 (disposal)',crossReferences:['IAS 21 — Foreign Exchange (functional/presentation currency)','IFRS 9 — Financial Instruments (net investment hedge designation)']},
+  'IFRIC 23': {paragraphs:'IFRIC 23.8 (detection assumption), 23.10-12 (measurement: most likely or expected value), 23.13-14 (changes in facts), 23.15-16 (disclosures)',crossReferences:['IAS 12 — Income Taxes (uncertain tax positions)','IAS 37 — Provisions (recognition criteria)']},
+};
+
+var ISA_PARA_REFS = {
+  'ISA 200': {paragraphs:'ISA 200.3-9 (overall objectives), 200.11 (objectives), 200.14-15 (professional skepticism), 200.16 (professional judgement), 200.A31-A51 (inherent limitations)',crossReferences:['ISA 220 — Quality Management (firm-level obligations)','ISA 315 — Risk Assessment (audit risk model)','ISA 700 — Forming an Opinion (conclusion on objectives)']},
+  'ISA 210': {paragraphs:'ISA 210.6-9 (preconditions for audit), 210.10-11 (agreed terms), 210.12 (contents of engagement letter), 210.13 (recurring audits), 210.14-20 (change in terms)',crossReferences:['ISA 220 — Quality Management (acceptance decisions)','ISA 580 — Written Representations (management responsibilities)','ISA 265 — Deficiencies (management letter)']},
+  'ISA 220': {paragraphs:'ISA 220.15 (engagement partner responsibility), 220.25 (competence of team), 220.34 (EQR required for listed entities), 220.35 (no report until EQR complete), 220.22-23 (consultation)',crossReferences:['ISQM 1 — Quality Management at Firm Level','ISA 300 — Planning (partner involvement)','ISA 600 — Group Audits (EQR for group engagements)']},
+  'ISA 230': {paragraphs:'ISA 230.7-8 (nature, purpose, content), 230.8 (what to document), 230.10 (significant matters), 230.11 (experienced auditor test), 230.14 (assembly within 60 days), 230.15 (retention)',crossReferences:['ISA 500 — Audit Evidence (sufficiency and appropriateness)','ISA 315 — Risk Assessment (risk documentation)','ISA 700 — Forming an Opinion (basis for conclusion)']},
+  'ISA 240': {paragraphs:'ISA 240.11-14 (fraud risk factors), 240.15 (team discussion), 240.17-20 (inquiries), 240.22-24 (risk assessment procedures), 240.26-27 (two presumed fraud risks), 240.32 (journal entry testing), 240.40 (communication of fraud)',crossReferences:['ISA 315 — Risk Assessment (fraud risk as significant risk)','ISA 330 — Responses (unpredictable procedures for fraud)','ISA 265 — Deficiencies (management override as deficiency)','ISA 705 — Modifications (fraud-related qualifications)']},
+  'ISA 250': {paragraphs:'ISA 250.12 (inquiry of management), 250.13 (direct effect laws), 250.14 (indirect effect laws), 250.16-18 (audit procedures), 250.22 (communication to TCWG), 250.28 (reporting to authorities)',crossReferences:['ISA 315 — Risk Assessment (compliance risk)','ISA 260 — Communication with TCWG','ISA 705 — Modifications (non-compliance effect on report)']},
+  'ISA 260': {paragraphs:'ISA 260.10-14 (what to communicate), 260.14 (significant findings), 260.17 (written communications), 260.18-21 (listed entities: independence), 260.A3 (timing of communications)',crossReferences:['ISA 265 — Deficiencies (control deficiency communication)','ISA 450 — Misstatements (uncorrected misstatements communicated)','ISA 580 — Written Representations (management representations)']},
+  'ISA 265': {paragraphs:'ISA 265.6 (significant deficiency definition), 265.9 (written communication to TCWG), 265.10 (written communication to management), 265.11 (other deficiencies), 265.A7-A9 (factors to consider)',crossReferences:['ISA 315 — Risk Assessment (internal control assessment)','ISA 330 — Responses (tests of controls)','ISA 260 — Communication with TCWG']},
+  'ISA 300': {paragraphs:'ISA 300.6 (preliminary engagement activities), 300.7 (overall audit strategy), 300.8 (audit plan), 300.12 (planning is continuous), 300.13 (documentation of plan)',crossReferences:['ISA 315 — Risk Assessment (risk-based planning)','ISA 320 — Materiality (set in planning)','ISA 220 — Quality Management (partner involvement in planning)']},
+  'ISA 315': {paragraphs:'ISA 315.11-17 (understanding the entity), 315.18-24 (internal controls), 315.25 (risk assessment: FS and assertion level), 315.26 (IT controls), 315.27-28 (significant risks), 315.30 (documentation)',crossReferences:['ISA 330 — Responses (responses linked to assessed risks)','ISA 240 — Fraud (fraud as significant risk)','ISA 320 — Materiality (materiality in risk assessment)','ISA 265 — Deficiencies (control weaknesses)']},
+  'ISA 320': {paragraphs:'ISA 320.10 (overall materiality), 320.11 (performance materiality), 320.12 (specific materiality), 320.13 (revision of materiality), 320.14 (documentation)',crossReferences:['ISA 450 — Misstatements (comparison of accumulated to materiality)','ISA 315 — Risk Assessment (materiality in planning)','ISA 600 — Group Audits (group vs component materiality)']},
+  'ISA 330': {paragraphs:'ISA 330.6-7 (overall responses: FS level), 330.8-17 (tests of controls), 330.18 (substantive procedures always required), 330.19-24 (significant risks: specific substantive)', crossReferences:['ISA 315 — Risk Assessment (risk drives responses)','ISA 500 — Evidence (sufficiency and appropriateness)','ISA 530 — Sampling (substantive tests of details)']},
+  'ISA 402': {paragraphs:'ISA 402.9-10 (Type 1 vs Type 2 reports), 402.12-15 (understanding service organisation controls), 402.16-21 (user auditor procedures), 402.22-23 (complementary controls)',crossReferences:['ISA 315 — Risk Assessment (IT and service org risks)','ISA 500 — Evidence (third-party evidence reliability)','ISAE 3402 — Assurance on Controls at Service Organisations']},
+  'ISA 450': {paragraphs:'ISA 450.5-8 (evaluating individual misstatements), 450.9-10 (accumulated misstatements), 450.11 (clearly trivial threshold), 450.12-16 (communication to management), 450.A19-A24 (evaluation)',crossReferences:['ISA 320 — Materiality (comparison to materiality)','ISA 260 — Communication (uncorrected misstatements to TCWG)','ISA 705 — Modifications (pervasive vs material misstatements)']},
+  'ISA 500': {paragraphs:'ISA 500.5-9 (sufficient appropriate evidence), 500.10-11 (selecting items), 500.A1-A25 (reliability of evidence: source and nature), 500.A30-A51 (evaluation)', crossReferences:['ISA 501 — Specific Considerations (inventory, litigation)','ISA 505 — External Confirmations','ISA 530 — Audit Sampling']},
+  'ISA 501': {paragraphs:'ISA 501.4-9 (inventory observation), 501.10-12 (litigation and claims), 501.13-14 (segment information)',crossReferences:['ISA 500 — Evidence (physical inspection as evidence)','ISA 540 — Estimates (litigation provisions under IAS 37)','ISA 550 — Related Parties (intercompany segment eliminations)']},
+  'ISA 505': {paragraphs:'ISA 505.7-9 (positive vs negative confirmations), 505.10-12 (management refusal), 505.15-17 (exceptions and non-responses), 505.18-19 (alternative procedures)',crossReferences:['ISA 500 — Evidence (third-party reliability)','ISA 330 — Responses (external confirmation as substantive procedure)','ISA 580 — Written Representations (management refusal)']},
+  'ISA 510': {paragraphs:'ISA 510.6-8 (opening balance procedures), 510.9-11 (consistency of accounting policies), 510.12 (if predecessor qualified)',crossReferences:['ISA 300 — Planning (predecessor communication)','ISA 700 — Opinion (implications for current year)','ISA 705 — Modifications (inability to obtain evidence on opening balances)']},
+  'ISA 520': {paragraphs:'ISA 520.5-8 (design and perform analytical procedures), 520.7 (expectation development), 520.8 (acceptable difference thresholds), 520.12 (final analytical review)',crossReferences:['ISA 315 — Risk Assessment (analytical procedures as risk procedures)','ISA 330 — Responses (substantive analytical procedures)','ISA 240 — Fraud (unusual fluctuations from analytical review)']},
+  'ISA 530': {paragraphs:'ISA 530.5-7 (design of sample), 530.10-14 (sample size factors), 530.15 (sample selection), 530.16-19 (evaluating results), 530.20 (projection of misstatements)',crossReferences:['ISA 500 — Evidence (sufficiency through sampling)','ISA 450 — Misstatements (projected misstatement vs materiality)','ISA 330 — Responses (sampling for tests of details)']},
+  'ISA 540': {paragraphs:'ISA 540.13-17 (risk assessment for estimates), 540.18-22 (responses to risks), 540.19 (retrospective review), 540.24 (point estimate vs range), 540.25-27 (indicator of management bias)',crossReferences:['IAS 36 — Impairment (VIU and goodwill impairment estimates)','IAS 37 — Provisions (best estimate for provisions)','IFRS 9 — Financial Instruments (ECL model estimation)','ISA 505 — External Confirmations (independent evidence for estimates)']},
+  'ISA 550': {paragraphs:'ISA 550.11-15 (identification of related parties), 550.16-19 (significant transactions outside normal course), 550.20-24 (fraud risk from related parties), 550.25-26 (disclosures)',crossReferences:['IAS 24 — Related Party Disclosures (IFRS framework)','ISA 240 — Fraud (management override via related party transactions)','ISA 260 — Communication (significant related party matters to TCWG)']},
+  'ISA 560': {paragraphs:'ISA 560.6-9 (before audit report date: facts discovered), 560.10 (at date: evaluating events), 560.11-16 (after audit report date: auditor has no obligation but if facts known), 560.17-18 (facts discovered after FS issued)',crossReferences:['IAS 10 — Events After the Reporting Period (adjusting vs non-adjusting)','ISA 700 — Opinion (date of auditor report)','ISA 705 — Modifications (subsequent events effect on opinion)']},
+  'ISA 570': {paragraphs:'ISA 570.10-13 (risk assessment for going concern), 570.16 (auditor evaluation when going concern appropriate), 570.17-19 (when management has not assessed), 570.20-23 (material uncertainty), 570.24-26 (auditor report implications)',crossReferences:['IAS 1 — Presentation (going concern basis of accounting)','ISA 700 — Opinion (emphasis of matter for material uncertainty)','ISA 706 — EOM/OMP (MUGU paragraph)','ISA 705 — Modifications (disclaimer if pervasive uncertainty)']},
+  'ISA 580': {paragraphs:'ISA 580.9-11 (management acknowledgement of responsibilities), 580.12-13 (other representations), 580.14 (date of representations: same as report), 580.19-20 (refusal to provide)',crossReferences:['ISA 265 — Deficiencies (management acknowledgement)','ISA 705 — Modifications (refusal to provide → scope limitation)','ISA 260 — Communication (representations discussed with TCWG)']},
+  'ISA 600': {paragraphs:'ISA 600.10-17 (group engagement team understanding), 600.18-24 (component auditor assessment), 600.25-29 (group and component materiality), 600.30-49 (work on components), 600.50-54 (communication)',crossReferences:['ISA 220 — Quality Management (EQR for group engagements)','ISA 315 — Risk Assessment (group-level risks)','ISA 320 — Materiality (group vs component materiality)','ISA 230 — Documentation (group instructions and component file)']},
+  'ISA 610': {paragraphs:'ISA 610.14-16 (competence and objectivity assessment), 610.17-19 (using specific work of internal audit), 610.20-25 (direct assistance restrictions), 610.26-27 (documentation)',crossReferences:['ISA 315 — Risk Assessment (internal audit as a control)','ISA 500 — Evidence (reliability of internal audit evidence)','ISA 330 — Responses (combined vs wholly substantive approach)']},
+  'ISA 620': {paragraphs:'ISA 620.9-11 (adequacy of expert work), 620.12-14 (competence, capabilities and objectivity), 620.15-16 (agreement with expert), 620.17-20 (evaluating expert work)',crossReferences:['ISA 500 — Evidence (expert evidence reliability)','ISA 540 — Estimates (valuations requiring specialist expertise)','IFRS 13 — Fair Value Measurement (Level 3 valuations)']},
+  'ISA 700': {paragraphs:'ISA 700.10-19 (forming the opinion), 700.20-21 (evaluating FS fairly presented), 700.22-41 (content of report), 700.42-43 (report for listed entities: KAMs)',crossReferences:['ISA 701 — Key Audit Matters','ISA 705 — Modifications (when unmodified not appropriate)','ISA 706 — EOM/OMP','ISA 560 — Subsequent Events (date of report)']},
+  'ISA 701': {paragraphs:'ISA 701.9-11 (determining KAMs), 701.10 (matters communicated to TCWG), 701.11 (applying professional judgement), 701.13-16 (description of each KAM in report)',crossReferences:['ISA 260 — Communication with TCWG (matters that become KAMs)','ISA 315 — Risk Assessment (significant risks often become KAMs)','ISA 705 — Modifications (KAMs still disclosed even if opinion modified)']},
+  'ISA 705': {paragraphs:'ISA 705.6-17 (qualified opinion), 705.8 (adverse: pervasive misstatement), 705.9 (disclaimer: pervasive scope limitation), 705.18-20 (effect on report format), 705.A1-A11 (determination of pervasiveness)',crossReferences:['ISA 700 — Opinion (basis for modification)','ISA 706 — EOM/OMP (used alongside unmodified, not instead)','ISA 570 — Going Concern (disclaimer in rare cases of MUGU)','ISA 450 — Misstatements (accumulated misstatements → material?)']},
+  'ISA 706': {paragraphs:'ISA 706.7-8 (EOM paragraph criteria), 706.9-10 (OMP paragraph criteria), 706.11 (placement: after opinion paragraph), 706.12-13 (wording)',crossReferences:['ISA 570 — Going Concern (MUGU triggers EOM)','ISA 705 — Modifications (EOM is NOT a substitute for modification)','ISA 710 — Comparative Information (prior year qualification OMP)']},
+  'ISA 710': {paragraphs:'ISA 710.10-14 (corresponding figures: current year audit), 710.15-18 (comparative FS: both years audited), 710.19-21 (reporting on prior period)',crossReferences:['ISA 700 — Opinion (report wording for comparatives)','ISA 705 — Modifications (prior year modified opinion)','IAS 8 — Accounting Policies (restatements affecting comparatives)']},
+  'ISA 720': {paragraphs:'ISA 720.11-14 (reading other information), 720.15-20 (material inconsistency), 720.21-24 (material misstatement of fact), 720.25 (reporting in auditor report)',crossReferences:['ISA 700 — Opinion (other information section of report)','ISA 240 — Fraud (inconsistency as potential fraud indicator)','ISA 315 — Risk Assessment (annual report as source of entity understanding)']},
+  /* ── ISA Special Considerations ── */
+  'ISA 800': {paragraphs:'ISA 800.6-9 (special purpose frameworks), 800.13-17 (report modifications for special purpose)',crossReferences:['ISA 700 — Forming an Opinion (standard opinion basis)','ISA 705 — Modifications (when applicable)','IAS 1 — Presentation (general purpose framework comparison)']},
+  'ISA 805': {paragraphs:'ISA 805.6-9 (single financial statements), 805.13-14 (specific elements)',crossReferences:['ISA 700 — Opinion (standard report basis)','ISA 705 — Modifications (qualification of element)']},
+  'ISA 810': {paragraphs:'ISA 810.6-9 (summary financial statements), 810.10-13 (applied criteria), 810.16-18 (auditor report)',crossReferences:['ISA 700 — Opinion (full FS audit basis for summary FS)','ISA 705 — Modifications (qualification implications)']},
+  /* ── ISRE Standards ── */
+  'ISRE 2400': {paragraphs:'ISRE 2400.6 (limited assurance definition), 2400.17-20 (accept/continue decisions), 2400.29-37 (understanding entity), 2400.43-60 (procedures), 2400.76-81 (review report)',crossReferences:['ISA 200 — Overall Objectives (reasonable vs limited assurance)','ISAE 3000 — Assurance Framework','ISA 300 — Planning (analogous planning requirements)']},
+  'ISRE 2410': {paragraphs:'ISRE 2410.13-16 (understanding the entity for interim), 2410.21 (procedures for interim review), 2410.32-36 (events after), 2410.37 (communication to TCWG)',crossReferences:['ISA 315 — Risk Assessment (knowledge from annual audit)','ISA 260 — Communication with TCWG','IAS 34 — Interim Financial Reporting (the financial reporting standard)']},
+  /* ── ISAE Standards ── */
+  'ISAE 3000': {paragraphs:'ISAE 3000.12 (two types: reasonable/limited), 3000.17 (three-party relationship), 3000.23-28 (acceptance), 3000.43-52 (performing), 3000.68-72 (reporting)',crossReferences:['ISAE 3402 — Controls at Service Organisations','ISAE 3410 — GHG Statements','ISA 200 — Reasonable Assurance (audit analogy)']},
+  'ISAE 3402': {paragraphs:'ISAE 3402.6 (Type 1 vs Type 2 distinction), 3402.51 (Type 1 criteria), 3402.52 (Type 2 criteria), 3402.54-60 (operating effectiveness tests)',crossReferences:['ISA 402 — Service Organisation Audits (user auditor counterpart)','ISAE 3000 — Assurance Framework','ISA 315 — Risk Assessment (IT and service org controls)']},
+  'ISAE 3410': {paragraphs:'ISAE 3410.10 (applying ISAE 3000 for GHG), 3410.16 (suitable criteria: GHG Protocol), 3410.32-40 (materiality for GHG), 3410.45-52 (procedures)',crossReferences:['ISAE 3000 — Assurance Framework','ISA 320 — Materiality (adapted for GHG)','ISA 500 — Evidence (data reliability for emissions)']},
+  /* ── ISRS Standards ── */
+  'ISRS 4400': {paragraphs:'ISRS 4400.8 (definition and nature), 4400.14-16 (agreed procedures), 4400.24-28 (reporting factual findings), 4400.29 (restricted use)',crossReferences:['ISAE 3000 — Assurance (no assurance provided in AUP)','ISA 500 — Evidence (procedures similar to audit procedures)']},
+};
+
 /* ── IFRS KNOWLEDGE BASE ─────────────────────────────────────────────*/
 var IFRS_KB = [
   /* ── A-SERIES: IFRS Standards ── */
@@ -7836,7 +8973,7 @@ var IFRS_KB = [
    solution:'Extension + rent increase = modification (IFRS 16.44). Not a separate new lease (extension is not at standalone price). Remeasure lease liability using revised payments discounted at revised IBR at modification date. Adjust ROU asset for difference. Only scope decrease triggers gain/loss.',
    example:'Original: 5yr, $100K/yr, IBR 5%, LL=$432K. After 3 years, modify: extend 3 more years, $105K/yr, new IBR 6%. Remaining pre-mod: $100K × 2yr at 6% = $183K. New total: $105K × 5yr at 6% = $442K. Adjustment: $442K − $183K = $259K added to both ROU and LL.',
    auditor:'Test all lease contracts for completeness of population. Validate IBR determination — risk-free rate + entity-specific credit spread + term. Assess extension option inclusion (IFRS 16.19) — reasonably certain test. For modifications: confirm modification date and whether separate lease criteria met.',
-   keywords:['lease','rou','right of use','lease liability','ibr','incremental borrowing rate','lessee','lessor','short term','low value','ifrs 16','modification','reassessment','commencement'],
+   keywords:['lease','rou','right of use','lease liability','ibr','incremental borrowing rate','lessee','lessor','short term','low value','ifrs 16','modification','reassessment','commencement','leaseback','sale and leaseback','slb','sale leaseback'],
    icon:'🏗️',color:'#f59e0b'},
 
   {std:'IFRS 17',title:'Insurance Contracts',series:'A',topic:'Insurance',
@@ -8413,6 +9550,10 @@ var CONCEPT_MAP = {
   'ibr':                                ['IFRS 16'],
   'incremental borrowing rate':         ['IFRS 16'],
   'lease modification':                 ['IFRS 16'],
+  'leaseback':                          ['IFRS 16'],
+  'sale and leaseback':                 ['IFRS 16'],
+  'slb':                                ['IFRS 16'],
+  'sale leaseback':                     ['IFRS 16'],
   'insurance':                          ['IFRS 17'],
   'csm':                                ['IFRS 17'],
   'contractual service margin':         ['IFRS 17'],
@@ -10478,22 +11619,84 @@ function _expandQuery(query){
   return expanded;
 }
 
+/* ── Levenshtein distance for typo-tolerant fuzzy matching ── */
+/* Early termination: bail out once distance exceeds the threshold */
+function _levenshtein(a, b, maxDist) {
+  var la = a.length, lb = b.length;
+  if (la === 0) return lb;
+  if (lb === 0) return la;
+  if (maxDist !== null && maxDist !== undefined && Math.abs(la - lb) > maxDist) return maxDist + 1;
+  var prev = [], curr = [], tmp;
+  for (var j = 0; j <= lb; j++) prev[j] = j;
+  for (var i = 1; i <= la; i++) {
+    curr[0] = i;
+    var rowMin = curr[0];
+    for (var j = 1; j <= lb; j++) {
+      curr[j] = a[i-1] === b[j-1]
+        ? prev[j-1]
+        : 1 + Math.min(prev[j], curr[j-1], prev[j-1]);
+      if (curr[j] < rowMin) rowMin = curr[j];
+    }
+    /* Early exit if entire row exceeds threshold */
+    if (maxDist !== null && maxDist !== undefined && rowMin > maxDist) return maxDist + 1;
+    tmp = prev; prev = curr; curr = tmp;
+  }
+  return prev[lb];
+}
+
+/* Named constant for score-bar normalisation (score of 40 ≈ strong exact match on a title field) */
+var _KB_MAX_SCORE = 40;
+/* Fuzzy (Levenshtein) match weight relative to exact substring matches */
+var _FUZZY_MATCH_WEIGHT = 0.45;
+/* Score bar colour thresholds (percentage) */
+var _SCORE_HIGH_PCT = 70;
+var _SCORE_MED_PCT  = 40;
+/* Field importance weights for scoring */
+var _FIELD_WEIGHTS = {std:10, title:8, topic:6, summary:4}; /* default (other fields) = 2 */
+
+/* Named helper to extract the standard code from a cross-reference string */
+function _extractStdCode(ref) {
+  var m = ref.match(/^(IFRS\s*\d+[A-Z]?|IAS\s*\d+[A-Z]?|ISA\s*\d+|IFRIC\s*\d+|ISRE\s*\d+)/i);
+  return m ? m[1].trim() : ref.split(' — ')[0].trim();
+}
+
+/* Named handler for cross-reference clicks — avoids inline function strings */
+function _kbXrefSearch(type, searchTerm) {
+  var inp = document.getElementById('kb-input-' + type);
+  if (inp) { inp.value = searchTerm; kbSearch(type); }
+}
+
 function _scoreEntry(entry, terms, fields) {
   var score = 0;
+  /* High-priority fields that get Levenshtein fuzzy matching on individual words */
+  var fuzzyFields = {std:true, title:true, topic:true, keywords:true};
   terms.forEach(function(term) {
     var t = term.toLowerCase();
     fields.forEach(function(f) {
       var val = (entry[f] || '').toLowerCase();
+      var w = _FIELD_WEIGHTS[f] !== undefined ? _FIELD_WEIGHTS[f] : 2;
       if (val.indexOf(t) >= 0) {
-        // Weight by field importance
-        var w = f==='std'?10 : f==='title'?8 : f==='topic'?6 : f==='summary'?4 : 2;
+        /* Exact substring match */
         score += w;
-        // Exact match bonus
         if (val === t) score += 5;
-        // Count occurrences
         var re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g');
-        var cnt = (val.match(re)||[]).length;
-        score += cnt * 0.5;
+        score += ((val.match(re)||[]).length) * 0.5;
+      } else if (fuzzyFields[f] && t.length >= 4) {
+        /* Levenshtein fuzzy match on high-priority short fields */
+        var maxTypos = t.length <= 5 ? 1 : 2;
+        var words = val.split(/\s+/);
+        var best = 0;
+        for (var wi = 0; wi < words.length; wi++) {
+          var wrd = words[wi];
+          /* Length pre-filter: skip words whose length differs by more than maxTypos */
+          if (Math.abs(wrd.length - t.length) > maxTypos) continue;
+          var dist = _levenshtein(t, wrd, maxTypos);
+          if (dist <= maxTypos) {
+            var lev = w * (1 - dist / Math.max(t.length, wrd.length)) * _FUZZY_MATCH_WEIGHT;
+            if (lev > best) best = lev;
+          }
+        }
+        score += best;
       }
     });
   });
@@ -10501,16 +11704,57 @@ function _scoreEntry(entry, terms, fields) {
 }
 
 
-function _buildResultCard(entry, query, type) {
+function _buildResultCard(entry, query, type, score) {
   var isIFRS = type === 'ifrs';
   var accent = entry.color || (isIFRS ? '#6366f1' : '#10b981');
   var terms = (query||'').split(/\s+/).filter(Boolean);
   var hi = function(t) { return _highlightText(t, terms.join(' ')); };
-  
+
+  /* Look up paragraph refs and cross-references from the lookup tables */
+  var paraData = isIFRS ? (IFRS_PARA_REFS[entry.std] || null) : (ISA_PARA_REFS[entry.std] || null);
+  var paragraphs = paraData ? paraData.paragraphs : '';
+  var crossRefs  = paraData ? (paraData.crossReferences || []) : [];
+
   var seriesBadge = isIFRS
     ? '<span style="background:rgba(99,102,241,.15);color:#a5b4fc;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:600">'+entry.series+'-Series</span>'
     : '<span style="background:rgba(16,185,129,.15);color:#6ee7b7;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:600">Vol '+entry.volume+' — '+entry.volume_name+'</span>';
-  
+
+  /* Relevance score bar — shown when a score is provided (i.e., from a search, not browse) */
+  var scoreBar = '';
+  if (score !== null && score !== undefined && score > 0) {
+    var pct = Math.min(100, Math.round(score / _KB_MAX_SCORE * 100));
+    var scoreColor = pct >= _SCORE_HIGH_PCT ? '#86BC25' : pct >= _SCORE_MED_PCT ? accent : '#636366';
+    scoreBar = '<div style="display:flex;align-items:center;gap:6px;margin-top:4px">'
+      + '<div style="flex:1;height:3px;background:#2c2c2e;border-radius:2px;overflow:hidden">'
+      + '<div style="width:'+pct+'%;height:100%;background:'+scoreColor+';border-radius:2px;transition:width .3s"></div>'
+      + '</div>'
+      + '<span style="font-size:9px;color:#636366;white-space:nowrap">'+pct+'% match</span>'
+      + '</div>';
+  }
+
+  /* Paragraph reference strip */
+  var paraStrip = paragraphs
+    ? '<div style="margin-top:4px;font-size:10px;color:#636366;font-family:\'SF Mono\',monospace">📎 ' + paragraphs + '</div>'
+    : '';
+
+  /* Cross-references section — uses named _kbXrefSearch to avoid inline function strings */
+  var xrefHtml = '';
+  if (crossRefs.length > 0) {
+    xrefHtml = '<div style="background:#0d0d0d;border:1px solid #2c2c2e;border-radius:6px;padding:10px">'
+      + '<div class="kb-label" style="color:#a78bfa">🔗 Cross-References</div>'
+      + crossRefs.map(function(ref) {
+          var searchTerm = _extractStdCode(ref);
+          return '<div style="display:flex;align-items:flex-start;gap:6px;margin:4px 0">'
+            + '<span style="color:#a78bfa;flex-shrink:0">→</span>'
+            + '<button onclick="_kbXrefSearch(\''+type+'\','+JSON.stringify(searchTerm)+')"'
+            + ' style="background:none;border:none;color:#aeaeb2;font-size:11px;text-align:left;cursor:pointer;padding:0;font-family:inherit;line-height:1.5"'
+            + ' onmouseover="this.style.color=\''+accent+'\'" onmouseout="this.style.color=\'#aeaeb2\'">'
+            + ref + '</button>'
+            + '</div>';
+        }).join('')
+      + '</div>';
+  }
+
   return '<div class="kb-card" style="border-left:3px solid '+accent+';margin-bottom:16px;background:#111;border-radius:8px;padding:0;overflow:hidden;">'
     // Header
     + '<div style="background:rgba('+hexToRgb(accent)+',.08);padding:14px 18px;display:flex;align-items:center;gap:12px;">'
@@ -10522,6 +11766,8 @@ function _buildResultCard(entry, query, type) {
     + '<span style="font-size:9px;background:#1c1c1e;color:#636366;padding:2px 8px;border-radius:10px">'+entry.topic+'</span>'
     + '</div>'
     + '<div style="font-size:14px;font-weight:700;color:#f5f5f7;margin-top:2px">'+hi(entry.title)+'</div>'
+    + paraStrip
+    + scoreBar
     + '</div></div>'
     // Body
     + '<div style="padding:14px 18px;display:grid;gap:12px;">'
@@ -10548,6 +11794,8 @@ function _buildResultCard(entry, query, type) {
     + '<div class="kb-label" style="color:#6ee7b7">🔬 Auditor\'s Perspective & Key Tests</div>'
     + '<div class="kb-text">'+hi(entry.auditor)+'</div>'
     + '</div>'
+    // Cross-references (if any)
+    + xrefHtml
     + '</div>'
     // Diagram strip
     + '<div style="background:#0a0a0a;padding:8px 18px;border-top:1px solid #1c1c1e;">'
@@ -10619,7 +11867,7 @@ function _gkbShowKBPreview(query) {
 
   if (scored.length > 0) {
     html += '<div style="font-size:11px;color:#636366;padding:4px 0 10px">Related standards — full AI answer loading above…</div>';
-    scored.slice(0, 4).forEach(function(x) { html += _buildResultCard(x.entry, query, _gkbType); });
+    scored.slice(0, 4).forEach(function(x) { html += _buildResultCard(x.entry, query, _gkbType, x.score); });
   }
   bodyEl.innerHTML = html;
 }
@@ -10680,7 +11928,7 @@ function gkbAISearch() {
     bodyEl.innerHTML = previewHtml;
     if (scored.length > 0) {
       var relatedHtml = '<div style="font-size:11px;color:#636366;padding:4px 0 10px">Related standards:</div>';
-      scored.slice(0, 4).forEach(function(x) { relatedHtml += _buildResultCard(x.entry, query, _gkbType); });
+      scored.slice(0, 4).forEach(function(x) { relatedHtml += _buildResultCard(x.entry, query, _gkbType, x.score); });
       bodyEl.innerHTML += relatedHtml;
     }
     slot = document.getElementById('gkb-ai-answer-slot');
@@ -10779,7 +12027,7 @@ function _gkbRenderAIAnswer(query, text, accent, relatedEntries, compPair) {
     var relDiv = document.createElement('div');
     relDiv.className = 'gkb-related-section';
     relDiv.innerHTML = '<div style="font-size:11px;color:#636366;padding:16px 0 10px">Related standards:</div>'
-      + relatedEntries.map(function(x) { return _buildResultCard(x.entry || x, query, _gkbType); }).join('');
+      + relatedEntries.map(function(x) { return _buildResultCard(x.entry || x, query, _gkbType, x.score); }).join('');
     bodyEl.appendChild(relDiv);
   }
 }
